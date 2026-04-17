@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Sales Decision Engine</title>
+    <link rel="stylesheet" href="/app/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">BTS DSS / Frontend v1</p>
+          <h1>Очередь решений, а не просто список сделок</h1>
+          <p class="hero-text">
+            Интерфейс собран поверх текущего backend API и показывает, кому звонить, почему сейчас
+            и что именно рекомендует движок.
+          </p>
+          <div class="hero-actions">
+            <button id="refreshAll" class="button button-primary">Обновить всё</button>
+            <button id="loadFirstCard" class="button button-secondary">Открыть топ-сделку</button>
+          </div>
+          <div class="queue-controls" style="margin-top: 16px;">
+            <label class="limit-control">
+              <span>Роль</span>
+              <select id="userRole">
+                <option value="admin">admin</option>
+                <option value="owner">owner</option>
+                <option value="rop">rop</option>
+                <option value="sales_manager">sales_manager</option>
+                <option value="logistics">logistics</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="hero-stats" id="heroStats">
+          <div class="stat-card">
+            <span class="stat-label">Загрузка</span>
+            <strong>...</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel panel-queue">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Manager Queue</p>
+              <h2>Что делать сейчас</h2>
+            </div>
+            <div class="queue-controls">
+              <label class="limit-control">
+                <span>Лимит</span>
+                <select id="queueLimit">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                </select>
+              </label>
+              <label class="limit-control">
+                <span>Bucket</span>
+                <select id="queueBucket">
+                  <option value="">Все</option>
+                  <option value="critical">critical</option>
+                  <option value="high">high</option>
+                  <option value="medium">medium</option>
+                  <option value="low">low</option>
+                </select>
+              </label>
+              <label class="limit-control">
+                <span>State</span>
+                <select id="queueState">
+                  <option value="">Все</option>
+                  <option value="hot_urgent">hot_urgent</option>
+                  <option value="hot_unworked">hot_unworked</option>
+                  <option value="debt_risk">debt_risk</option>
+                  <option value="spec_missing">spec_missing</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="queue-search">
+            <input id="queueSearch" type="text" placeholder="Поиск по компании, объекту, действию..." />
+          </div>
+          <div id="queueList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-card">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Opportunity Card</p>
+              <h2>Полная карточка сделки</h2>
+            </div>
+            <div class="search-box">
+              <input id="cardIdInput" type="text" value="opp-1001" />
+              <button id="loadCardButton" class="button button-secondary">Открыть</button>
+            </div>
+          </div>
+          <div id="cardView" class="card-view"></div>
+        </section>
+
+        <section class="panel panel-monitor">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Ingest Monitor</p>
+              <h2>Очередь и ошибки интеграции</h2>
+            </div>
+            <button id="processIngestButton" class="button button-secondary">Прогнать ingest</button>
+          </div>
+          <div class="monitor-grid">
+            <div class="monitor-block">
+              <h3>Pending</h3>
+              <div id="pendingList" class="simple-list"></div>
+            </div>
+            <div class="monitor-block">
+              <h3>Errors</h3>
+              <div id="errorList" class="simple-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel panel-rop">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">ROP / Escalations</p>
+              <h2>Что нужно вмешать руководителю</h2>
+            </div>
+            <div class="queue-controls">
+              <label class="limit-control">
+                <span>Тип</span>
+                <select id="ropType">
+                  <option value="">Все</option>
+                  <option value="sla_breach">sla_breach</option>
+                  <option value="debt_risk">debt_risk</option>
+                  <option value="low_margin">low_margin</option>
+                  <option value="subrent_only">subrent_only</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div id="ropList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-quality">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Data Quality</p>
+              <h2>Насколько можно доверять данным</h2>
+            </div>
+          </div>
+          <div id="qualitySummary" class="hero-stats"></div>
+          <div id="qualityList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-quality">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Normalization</p>
+              <h2>Кандидаты на дубли и склейку</h2>
+            </div>
+          </div>
+          <div id="normalizationSummary" class="hero-stats"></div>
+          <div id="normalizationList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-quality">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Feedback Learning</p>
+              <h2>Какие рекомендации реально работают</h2>
+            </div>
+          </div>
+          <div id="feedbackLearningSummary" class="hero-stats"></div>
+          <div id="feedbackLearningList" class="queue-list"></div>
+          <div id="feedbackRecentList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-quality">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Audit Log</p>
+              <h2>Журнал действий и доступа</h2>
+            </div>
+          </div>
+          <div id="auditList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-logistics">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Logistics / Subrent</p>
+              <h2>Что нужно логистике и субаренде</h2>
+            </div>
+            <div class="queue-controls">
+              <label class="limit-control">
+                <span>Режим</span>
+                <select id="logisticsMode">
+                  <option value="">Все</option>
+                  <option value="urgent">urgent</option>
+                  <option value="subrent">subrent</option>
+                  <option value="reserve">reserve</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div id="logisticsList" class="queue-list"></div>
+        </section>
+
+        <section class="panel panel-owner">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Owner / Director</p>
+              <h2>Стратегические отклонения и загрузка парка</h2>
+            </div>
+            <div class="queue-controls">
+              <label class="limit-control">
+                <span>Фокус</span>
+                <select id="ownerStrategy">
+                  <option value="">Все</option>
+                  <option value="fleet_priority">fleet_priority</option>
+                  <option value="margin_risk">margin_risk</option>
+                  <option value="subrent_dependency">subrent_dependency</option>
+                  <option value="debt_control">debt_control</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div id="ownerList" class="queue-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app/app.js"></script>
+  </body>
+</html>

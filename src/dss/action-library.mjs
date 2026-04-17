@@ -1,0 +1,86 @@
+export const ACTION_LIBRARY = [
+  {
+    action_code: 'sales_call',
+    action_name: 'Позвонить клиенту',
+    action_type: 'sales_call',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 15,
+    requires_approval: false,
+  },
+  {
+    action_code: 'send_offer',
+    action_name: 'Отправить КП',
+    action_type: 'send_offer',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 30,
+    requires_approval: false,
+  },
+  {
+    action_code: 'send_contract',
+    action_name: 'Отправить договор',
+    action_type: 'send_contract',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 60,
+    requires_approval: false,
+  },
+  {
+    action_code: 'clarify_specs',
+    action_name: 'Уточнить техпараметры',
+    action_type: 'clarify_specs',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 60,
+    requires_approval: false,
+  },
+  {
+    action_code: 'request_subrent',
+    action_name: 'Передать в субаренду',
+    action_type: 'request_subrent',
+    target_role: 'logistics',
+    deadline_sla_minutes: 30,
+    requires_approval: false,
+  },
+  {
+    action_code: 'reserve_own_equipment',
+    action_name: 'Зарезервировать свою технику',
+    action_type: 'reserve_own_equipment',
+    target_role: 'logistics',
+    deadline_sla_minutes: 20,
+    requires_approval: false,
+  },
+  {
+    action_code: 'reprice_deal',
+    action_name: 'Пересчитать ставку',
+    action_type: 'reprice_deal',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 45,
+    requires_approval: false,
+  },
+  {
+    action_code: 'owner_escalation',
+    action_name: 'Эскалировать на руководителя',
+    action_type: 'owner_escalation',
+    target_role: 'rop',
+    deadline_sla_minutes: 15,
+    requires_approval: true,
+  },
+  {
+    action_code: 'stop_deal',
+    action_name: 'Остановить сделку',
+    action_type: 'stop_deal',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 240,
+    requires_approval: true,
+  },
+  {
+    action_code: 'debt_control',
+    action_name: 'Проверить условия оплаты',
+    action_type: 'debt_control',
+    target_role: 'finance_controller',
+    deadline_sla_minutes: 60,
+    requires_approval: true,
+  },
+];
+
+export function getAction(actionCode) {
+  return ACTION_LIBRARY.find((action) => action.action_code === actionCode) ?? null;
+}

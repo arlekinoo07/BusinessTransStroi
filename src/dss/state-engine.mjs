@@ -1,0 +1,175 @@
+function clampScore(value) {
+  return Math.max(0, Math.min(5, value));
+}
+
+function scoreNeed(opportunity) {
+  let score = 0;
+  if (opportunity.project_object?.normalized_value) score += 1.5;
+  if (opportunity.equipment_type?.normalized_value) score += 1.5;
+  if (opportunity.time_window?.start_at) score += 1;
+  if ((opportunity.communication_events ?? []).length >= 2) score += 1;
+  if (opportunity.commercial_scenario) score += 1;
+  return clampScore(score);
+}
+
+function scoreTime(opportunity) {
+  if (!opportunity.time_window?.start_at) {
+    return 1;
+  }
+
+  const startAt = new Date(opportunity.time_window.start_at).getTime();
+  const now = Date.now();
+  const hours = (startAt - now) / 3_600_000;
+
+  if (hours <= 24) return 5;
+  if (hours <= 72) return 4;
+  if (hours <= 168) return 3;
+  if (hours <= 336) return 2;
+  return 1;
+}
+
+function scoreSpec(opportunity) {
+  let score = 0;
+  if (opportunity.equipment_type?.normalized_value) score += 2;
+  if (opportunity.technical_requirements?.length) score += 1.5;
+  if (opportunity.time_window?.duration_days) score += 0.75;
+  if (opportunity.project_object?.normalized_value) score += 0.75;
+  return clampScore(score);
+}
+
+function scoreAccess(opportunity) {
+  let score = 1;
+  if (opportunity.decision_access_status === 'decision_maker') score += 2.5;
+  if (opportunity.contact_person?.role?.toLowerCase().includes('лпр')) score += 1.5;
+  if (opportunity.contact_person?.influence_score >= 0.7) score += 1;
+  return clampScore(score);
+}
+
+function scoreMoney(opportunity) {
+  let score = 0.5;
+  if (opportunity.commercial_stage === 'offer_requested') score += 1.5;
+  if (opportunity.commercial_stage === 'contract_requested') score += 2.5;
+  if (opportunity.payment_readiness === 'ready') score += 1;
+  if (opportunity.financial_risk?.debt_overdue_days > 0) score -= 2;
+  return clampScore(score);
+}
+
+function scoreFit(opportunity) {
+  let score = 0.5;
+  if (opportunity.economic_assessment?.own_equipment_available) score += 2.5;
+  if (opportunity.economic_assessment?.expected_margin_percent >= 25) score += 1.5;
+  if (opportunity.economic_assessment?.subrent_required) score -= 0.5;
+  if (opportunity.financial_risk?.client_blacklisted) score = 0;
+  return clampScore(score);
+}
+
+function addState(states, state_code, reason, confidence_score) {
+  states.push({
+    state_code,
+    confidence_score: Number(confidence_score.toFixed(2)),
+    reason,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export function calculateScores(opportunity) {
+  const overriddenScores = opportunity.source_scores;
+  if (
+    overriddenScores
+    && ['need', 'time', 'spec', 'access', 'money', 'fit'].every((key) => overriddenScores[key] !== null && overriddenScores[key] !== undefined)
+  ) {
+    return {
+      need: clampScore(overriddenScores.need),
+      time: clampScore(overriddenScores.time),
+      spec: clampScore(overriddenScores.spec),
+      access: clampScore(overriddenScores.access),
+      money: clampScore(overriddenScores.money),
+      fit: clampScore(overriddenScores.fit),
+    };
+  }
+
+  return {
+    need: scoreNeed(opportunity),
+    time: scoreTime(opportunity),
+    spec: scoreSpec(opportunity),
+    access: scoreAccess(opportunity),
+    money: scoreMoney(opportunity),
+    fit: scoreFit(opportunity),
+  };
+}
+
+export function calculatePriorityScore(opportunity, scores) {
+  const pclose = (scores.need + scores.access + scores.money) / 15;
+  const econValue = Math.max(0.1, (opportunity.economic_assessment?.expected_margin_percent ?? 10) / 100);
+  const urgency = scores.time / 5;
+  const fit = scores.fit / 5;
+  const actionability = (scores.spec + scores.access) / 10;
+  const strategyWeight = opportunity.strategy_weight ?? 1;
+
+  let priority = pclose * econValue * urgency * fit * actionability * strategyWeight * 100;
+
+  if (!opportunity.economic_assessment?.own_equipment_available && opportunity.financial_risk?.debt_overdue_days > 30) {
+    priority *= 0.3;
+  }
+
+  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 0) {
+    priority = 0;
+  }
+
+  return Number(priority.toFixed(2));
+}
+
+export function evaluateOpportunityState(opportunity) {
+  const scores = calculateScores(opportunity);
+  const states = [];
+  const lastTouchHours = opportunity.last_touch_at
+    ? (Date.now() - new Date(opportunity.last_touch_at).getTime()) / 3_600_000
+    : null;
+
+  if (scores.need >= 4 && scores.time >= 4 && scores.money >= 3) {
+    addState(states, 'hot_urgent', 'Потребность конкретная, окно мобилизации близко, клиент дошел до коммерческой стадии.', 0.88);
+  }
+
+  if (scores.fit >= 4 && opportunity.economic_assessment?.own_equipment_available) {
+    addState(states, 'hot_own_equipment', 'Сделка хорошо ложится на свой парк и свою экономику.', 0.86);
+  }
+
+  if (scores.need >= 4 && !opportunity.economic_assessment?.own_equipment_available) {
+    addState(states, 'hot_subrent_only', 'Сделка живая, но своя техника недоступна.', 0.79);
+  }
+
+  if (lastTouchHours !== null && lastTouchHours > (opportunity.sla_hours ?? 4) && scores.need >= 3.5) {
+    addState(states, 'hot_unworked', 'По горячей сделке превышен SLA реакции.', 0.9);
+  }
+
+  if (scores.spec < 2.5) {
+    addState(states, 'spec_missing', 'Не хватает технической конкретики для уверенной обработки.', 0.83);
+  }
+
+  if (scores.need < 2 && scores.spec < 2 && scores.time < 2) {
+    addState(states, 'noise_low_priority', 'Сделка пока шумовая и не готова к активной обработке.', 0.76);
+  }
+
+  if ((opportunity.financial_risk?.debt_overdue_days ?? 0) > 15 || opportunity.financial_risk?.credit_limit_blocked) {
+    addState(states, 'debt_risk', 'У клиента есть финансовые ограничения или просрочка.', 0.89);
+  }
+
+  if (opportunity.graph_signals?.cross_sell_open) {
+    addState(states, 'cross_sell_open', 'По объекту виден соседний спрос в связях.', 0.72);
+  }
+
+  if (opportunity.graph_signals?.competitor_present && scores.fit >= 3) {
+    addState(states, 'competitor_attack_window', 'На объекте замечен конкурент, но шанс перехвата высокий.', 0.7);
+  }
+
+  if (opportunity.next_step?.due_at && new Date(opportunity.next_step.due_at).getTime() < Date.now()) {
+    addState(states, 'manager_promise_overdue', 'Обещанный follow-up просрочен.', 0.93);
+  }
+
+  return {
+    opportunity_id: opportunity.id,
+    scores,
+    priority_score: calculatePriorityScore(opportunity, scores),
+    states,
+  };
+}
