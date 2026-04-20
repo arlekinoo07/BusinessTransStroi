@@ -320,6 +320,179 @@ async function resolveOpportunityDbId(client, patch) {
   return null;
 }
 
+async function upsertCompanyFromPatch(client, patch, fallbackRef) {
+  if (!patch.company_external_id && !patch.company?.raw_value) {
+    return null;
+  }
+
+  const companyName = patch.company ?? {
+    raw_value: `Компания ${patch.company_external_id ?? fallbackRef}`,
+    normalized_value: `компания ${patch.company_external_id ?? fallbackRef}`,
+    confidence_score: 0.3,
+  };
+  const { rows } = await client.query(
+    `
+      INSERT INTO companies (bitrix_company_id, raw_name, normalized_name, confidence_score)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (bitrix_company_id)
+      DO UPDATE SET
+        raw_name = EXCLUDED.raw_name,
+        normalized_name = EXCLUDED.normalized_name,
+        confidence_score = GREATEST(companies.confidence_score, EXCLUDED.confidence_score),
+        updated_at = NOW()
+      RETURNING id
+    `,
+    [
+      String(patch.company_external_id ?? patch.company?.resolved_entity_id ?? `derived-company:${fallbackRef}`),
+      companyName.raw_value,
+      companyName.normalized_value,
+      companyName.confidence_score ?? 0.3,
+    ],
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function upsertPersonFromPatch(client, patch, companyId, fallbackRef) {
+  if (!patch.contact_external_id && !patch.person?.raw_value) {
+    return null;
+  }
+
+  const { rows } = await client.query(
+    `
+      INSERT INTO persons (
+        bitrix_contact_id,
+        company_id,
+        raw_name,
+        normalized_name,
+        role_name,
+        confidence_score
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (bitrix_contact_id)
+      DO UPDATE SET
+        company_id = COALESCE(EXCLUDED.company_id, persons.company_id),
+        raw_name = COALESCE(EXCLUDED.raw_name, persons.raw_name),
+        normalized_name = COALESCE(EXCLUDED.normalized_name, persons.normalized_name),
+        role_name = COALESCE(EXCLUDED.role_name, persons.role_name),
+        confidence_score = GREATEST(COALESCE(persons.confidence_score, 0), COALESCE(EXCLUDED.confidence_score, 0)),
+        updated_at = NOW()
+      RETURNING id
+    `,
+    [
+      String(patch.contact_external_id ?? patch.person?.resolved_entity_id ?? `derived-contact:${fallbackRef}`),
+      companyId,
+      patch.person?.raw_value ?? `Контакт ${patch.contact_external_id ?? fallbackRef}`,
+      patch.person?.normalized_value ?? `контакт ${patch.contact_external_id ?? fallbackRef}`,
+      patch.person?.role ?? null,
+      patch.person?.confidence_score ?? 0.25,
+    ],
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function upsertProjectObjectFromPatch(client, patch, fallbackRef) {
+  if (!patch.project_object?.raw_value) {
+    return null;
+  }
+
+  const { rows } = await client.query(
+    `
+      INSERT INTO project_objects (
+        external_object_id,
+        raw_name,
+        normalized_name,
+        address_raw,
+        address_normalized,
+        confidence_score
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (external_object_id)
+      DO UPDATE SET
+        raw_name = EXCLUDED.raw_name,
+        normalized_name = EXCLUDED.normalized_name,
+        address_raw = COALESCE(EXCLUDED.address_raw, project_objects.address_raw),
+        address_normalized = COALESCE(EXCLUDED.address_normalized, project_objects.address_normalized),
+        confidence_score = GREATEST(COALESCE(project_objects.confidence_score, 0), COALESCE(EXCLUDED.confidence_score, 0)),
+        updated_at = NOW()
+      RETURNING id
+    `,
+    [
+      patch.project_object.resolved_entity_id ?? `bitrix-object:${fallbackRef}`,
+      patch.project_object.raw_value,
+      patch.project_object.normalized_value,
+      patch.address?.raw_value ?? null,
+      patch.address?.normalized_value ?? null,
+      patch.project_object.confidence_score ?? 0.3,
+    ],
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function upsertEquipmentTypeFromPatch(client, patch) {
+  if (!patch.equipment_type?.normalized_value) {
+    return null;
+  }
+
+  const equipmentCode = patch.equipment_type.normalized_value.toLowerCase().replace(/\s+/g, '_');
+  const { rows } = await client.query(
+    `
+      INSERT INTO equipment_types (code, type_name)
+      VALUES ($1, $2)
+      ON CONFLICT (code)
+      DO UPDATE SET
+        type_name = EXCLUDED.type_name,
+        updated_at = NOW()
+      RETURNING id
+    `,
+    [equipmentCode, patch.equipment_type.normalized_value],
+  );
+  return rows[0]?.id ?? null;
+}
+
+async function enrichOpportunityFromCommunicationPatch(client, opportunityId, patch) {
+  if (!opportunityId) {
+    return;
+  }
+
+  const fallbackRef = patch.opportunity_external_id ?? patch.external_id;
+  const companyId = await upsertCompanyFromPatch(client, patch, fallbackRef);
+  const personId = await upsertPersonFromPatch(client, patch, companyId, fallbackRef);
+  const projectObjectId = await upsertProjectObjectFromPatch(client, patch, fallbackRef);
+  const equipmentTypeId = await upsertEquipmentTypeFromPatch(client, patch);
+
+  await client.query(
+    `
+      UPDATE opportunities
+      SET
+        company_id = COALESCE(company_id, $2),
+        person_id = COALESCE(person_id, $3),
+        project_object_id = COALESCE(project_object_id, $4),
+        equipment_type_id = COALESCE(equipment_type_id, $5),
+        requested_start_at = COALESCE(requested_start_at, $6),
+        requested_duration_days = COALESCE(requested_duration_days, $7),
+        next_step_code = COALESCE(next_step_code, $8),
+        next_step_due_at = COALESCE(next_step_due_at, $9),
+        next_step_description = COALESCE(next_step_description, $10),
+        last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($11, '-infinity'::timestamptz)),
+        updated_at = NOW()
+      WHERE id = $1
+    `,
+    [
+      opportunityId,
+      companyId,
+      personId,
+      projectObjectId,
+      equipmentTypeId,
+      patch.requested_start_at ?? null,
+      patch.requested_duration_days ?? null,
+      patch.next_step_code ?? null,
+      patch.next_step_due_at ?? null,
+      patch.next_step_description ?? null,
+      patch.event_datetime ?? null,
+    ],
+  );
+}
+
 export class PostgresOpportunityRepository {
   async listOpportunities() {
     const rows = await fetchOpportunityRows();
@@ -1645,6 +1818,8 @@ export class PostgresOpportunityRepository {
             JSON.stringify(patch.extraction_json ?? {}),
           ],
         );
+
+        await enrichOpportunityFromCommunicationPatch(client, opportunityId, patch);
 
         return {
           kind: patch.kind,

@@ -74,6 +74,9 @@ function deriveCommercialStage(stageId, textSignals) {
   if (textSignals.money_readiness.value === 'commercial' && textSignals.next_touch_hint?.toLowerCase().includes('договор')) {
     return 'contract_requested';
   }
+  if (textSignals.money_readiness.value === 'commercial' && textSignals.next_touch_hint?.toLowerCase().includes('счет')) {
+    return 'invoice_requested';
+  }
   if (textSignals.money_readiness.value === 'commercial') {
     return 'offer_requested';
   }
@@ -172,8 +175,8 @@ export function buildBitrixEntityPatch(event) {
       decision_access_status: extracted.person?.raw_value?.toLowerCase().includes('лпр') ? 'decision_maker' : 'influencer',
       commercial_stage: deriveCommercialStage(record.STAGE_ID, extracted),
       payment_readiness: extracted.money_readiness.value === 'commercial' ? 'ready' : 'early',
-      requested_start_at: toIsoDate(firstNonEmpty(record.BEGINDATE, record.UF_CRM_START_DATE, record.CLOSEDATE)),
-      requested_duration_days: cleanupNumber(firstNonEmpty(record.UF_CRM_DURATION_DAYS, record.DURATION_DAYS)),
+      requested_start_at: toIsoDate(firstNonEmpty(record.BEGINDATE, record.UF_CRM_START_DATE, extracted.requested_start_at, record.CLOSEDATE)),
+      requested_duration_days: cleanupNumber(firstNonEmpty(record.UF_CRM_DURATION_DAYS, record.DURATION_DAYS, extracted.requested_duration_days)),
       expected_margin_percent: cleanupNumber(firstNonEmpty(record.UF_CRM_MARGIN_PCT, record.UF_CRM_EXPECTED_MARGIN)),
       own_equipment_available: record.UF_CRM_OWN_EQUIPMENT_AVAILABLE === 'Y' ? true : null,
       subrent_required: extracted.supply_mode === 'subrent' ? true : null,
@@ -181,8 +184,8 @@ export function buildBitrixEntityPatch(event) {
       credit_limit_blocked: record.UF_CRM_CREDIT_BLOCKED === 'Y',
       client_blacklisted: record.UF_CRM_BLACKLISTED === 'Y',
       last_touch_at: toIsoDate(firstNonEmpty(record.DATE_MODIFY, event.occurred_at)),
-      next_step_code: extracted.next_touch_hint ? 'follow_up_reminder' : null,
-      next_step_due_at: null,
+      next_step_code: firstNonEmpty(record.UF_CRM_NEXT_STEP_CODE, extracted.next_touch_action_code, extracted.next_touch_hint ? 'follow_up_reminder' : null),
+      next_step_due_at: toIsoDate(firstNonEmpty(record.UF_CRM_NEXT_STEP_DUE_AT, extracted.next_touch_due_at, extracted.manager_promise?.due_at)),
       next_step_description: extracted.next_touch_hint,
       technical_requirements: [record.UF_CRM_TECH_SPECS, record.UF_CRM_WORK_CONDITIONS].filter(Boolean),
       score_overrides: {
@@ -215,11 +218,18 @@ export function buildBitrixEntityPatch(event) {
       company: extracted.company,
       person: extracted.person,
       project_object: extracted.project_object,
+      address: extracted.address,
+      equipment_type: extracted.equipment_type,
       event_type: event.entity_type,
       event_datetime: toIsoDate(firstNonEmpty(record.CREATED, record.CREATED_AT, event.occurred_at)),
       channel: mapEventTypeToChannel(event.entity_type),
       summary_text: firstNonEmpty(record.SUBJECT, record.COMMENT, record.DESCRIPTION),
       raw_text: text,
+      requested_start_at: extracted.requested_start_at,
+      requested_duration_days: extracted.requested_duration_days,
+      next_step_code: extracted.next_touch_action_code,
+      next_step_due_at: extracted.next_touch_due_at ?? extracted.manager_promise?.due_at ?? null,
+      next_step_description: extracted.next_touch_hint ?? extracted.manager_promise?.raw_value ?? null,
       extraction_json: {
         ...extracted,
         author_external_id: firstNonEmpty(record.AUTHOR_ID, record.CREATED_BY_ID, record.RESPONSIBLE_ID),

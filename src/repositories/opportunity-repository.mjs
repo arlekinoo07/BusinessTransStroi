@@ -430,6 +430,17 @@ export class InMemoryOpportunityRepository {
           opportunity.company = patch.company ?? opportunity.company;
           opportunity.contact_person = patch.person ?? opportunity.contact_person;
           opportunity.project_object = patch.project_object ?? opportunity.project_object;
+          opportunity.address = patch.address ?? opportunity.address;
+          opportunity.equipment_type = patch.equipment_type ?? opportunity.equipment_type;
+          opportunity.time_window = {
+            start_at: patch.requested_start_at ?? opportunity.time_window?.start_at ?? null,
+            duration_days: patch.requested_duration_days ?? opportunity.time_window?.duration_days ?? null,
+          };
+          opportunity.next_step = {
+            code: patch.next_step_code ?? opportunity.next_step?.code ?? null,
+            due_at: patch.next_step_due_at ?? opportunity.next_step?.due_at ?? null,
+            description: patch.next_step_description ?? opportunity.next_step?.description ?? null,
+          };
           opportunity.communication_events.unshift({
             id: patch.external_id,
             type: patch.event_type,
