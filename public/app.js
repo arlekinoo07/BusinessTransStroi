@@ -488,6 +488,88 @@ function renderCommunicationHistory(items) {
   `;
 }
 
+function renderEvidenceList(items, formatter) {
+  if (!items?.length) {
+    return '<div class="empty">Нет подтверждающих событий.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => `
+        <div class="history-item">
+          ${formatter(item)}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderRiskEvidence(evidence) {
+  if (!evidence) {
+    return '<div class="empty">Evidence пока не собрано.</div>';
+  }
+
+  const flags = evidence.flags ?? {};
+  const counters = evidence.counters ?? {};
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Flags</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">competitor: ${flags.competitor_present ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">debt: ${flags.debt_risk ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">subrent: ${flags.subrent_required ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">promise overdue: ${flags.manager_promise_overdue ? 'yes' : 'no'}</span>
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Counters</strong>
+        <div class="badge-row">
+          ${Object.entries(counters).map(([key, value]) => `<span class="badge badge-low">${key}: ${value}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card-grid compact-grid">
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Competitor</h3>
+        ${renderEvidenceList(evidence.evidence?.competitor, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>markers: ${(item.markers ?? []).join(', ') || '—'}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Debt Risk</h3>
+        ${renderEvidenceList(evidence.evidence?.debt_risk, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>markers: ${(item.markers ?? []).join(', ') || '—'}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Subrent</h3>
+        ${renderEvidenceList(evidence.evidence?.subrent, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Manager Promises</h3>
+        ${renderEvidenceList(evidence.evidence?.manager_promises, (item) => `
+          <strong>${item.promise ?? item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>due: ${formatDateTime(item.due_at)} · action: ${item.action_code ?? '—'}</div>
+        `)}
+      </section>
+    </div>
+  `;
+}
+
 function renderCard(card) {
   if (!card) {
     els.cardView.innerHTML = '<div class="empty">Сделка не найдена.</div>';
@@ -537,6 +619,11 @@ function renderCard(card) {
         <div class="history-list">
           ${(card.recommendation.explainability?.why_important ?? []).map((item) => `<div class="history-item">${item}</div>`).join('') || '<div class="empty">Пока без explainability.</div>'}
         </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Risk / Evidence</p>
+        <h3>Сигналы и подтверждения</h3>
+        ${renderRiskEvidence(card.risk_evidence)}
       </section>
       <section class="card-section">
         <p class="panel-kicker">Score Vector</p>

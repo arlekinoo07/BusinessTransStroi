@@ -283,6 +283,11 @@ input,
   gap: 12px;
 }
 
+.compact-grid {
+  margin-top: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .card-section {
   border-radius: 22px;
   padding: 16px;

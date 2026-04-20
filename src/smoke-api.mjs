@@ -61,6 +61,7 @@ async function main() {
     card_has_recommendation: Boolean(opportunityCard?.recommendation?.action_code),
     card_graph_nodes: opportunityCard?.graph?.nodes?.length ?? 0,
     card_communication_history: opportunityCard?.communication_history?.length ?? 0,
+    card_risk_evidence_flags: Object.values(opportunityCard?.risk_evidence?.flags ?? {}).filter(Boolean).length,
     card_similar_cases: opportunityCard?.similar_cases?.length ?? 0,
     refreshed_recommendation_status: refreshedCard?.recommendation?.recommendation_status ?? null,
     contract_names: Object.keys(getContractsOverview()),

@@ -201,6 +201,32 @@ export const opportunityCardSchema = {
         explainability: { type: 'object' },
       },
     },
+    risk_evidence: {
+      type: 'object',
+      properties: {
+        flags: {
+          type: 'object',
+          properties: {
+            competitor_present: { type: 'boolean' },
+            debt_risk: { type: 'boolean' },
+            subrent_required: { type: 'boolean' },
+            manager_promise_overdue: { type: 'boolean' },
+          },
+        },
+        counters: {
+          type: 'object',
+          properties: {
+            communication_events: { type: 'number' },
+            competitor_mentions: { type: 'number' },
+            debt_markers: { type: 'number' },
+            subrent_markers: { type: 'number' },
+            promise_markers: { type: 'number' },
+            ignored_noise_events: { type: 'number' },
+          },
+        },
+        evidence: { type: 'object' },
+      },
+    },
     similar_cases: {
       type: 'array',
       items: {

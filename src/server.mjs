@@ -138,6 +138,90 @@ function buildQueueItem(opportunity, state, decision) {
   };
 }
 
+function collectSignalEvidence(opportunity) {
+  const events = opportunity.communication_events ?? [];
+  const competitorEvents = [];
+  const debtRiskEvents = [];
+  const subrentEvents = [];
+  const promiseEvents = [];
+  const noiseEvents = [];
+
+  for (const event of events) {
+    const extraction = event.extraction_json ?? {};
+    const baseEvidence = {
+      event_id: event.id,
+      channel: event.channel ?? null,
+      datetime: event.datetime ?? null,
+      summary: event.summary ?? event.text ?? null,
+    };
+
+    if (extraction.is_noise) {
+      noiseEvents.push({
+        ...baseEvidence,
+        reason: extraction.noise_reason ?? null,
+        markers: extraction.noise_markers ?? [],
+      });
+    }
+
+    if (extraction.competitor?.mentioned) {
+      competitorEvents.push({
+        ...baseEvidence,
+        markers: extraction.competitor.markers ?? [],
+      });
+    }
+
+    if (extraction.debt_risk?.mentioned) {
+      debtRiskEvents.push({
+        ...baseEvidence,
+        markers: extraction.debt_risk.markers ?? [],
+        requires_prepayment: extraction.debt_risk.requires_prepayment ?? false,
+      });
+    }
+
+    if (extraction.supply_mode === 'subrent') {
+      subrentEvents.push({
+        ...baseEvidence,
+        markers: ['subrent'],
+      });
+    }
+
+    if (extraction.manager_promise?.raw_value || extraction.next_touch_hint) {
+      promiseEvents.push({
+        ...baseEvidence,
+        promise: extraction.manager_promise?.raw_value ?? extraction.next_touch_hint ?? null,
+        due_at: extraction.manager_promise?.due_at ?? extraction.next_touch_due_at ?? null,
+        action_code: extraction.next_touch_action_code ?? null,
+      });
+    }
+  }
+
+  return {
+    flags: {
+      competitor_present: opportunity.graph_signals?.competitor_present ?? false,
+      debt_risk: (opportunity.financial_risk?.debt_overdue_days ?? 0) > 0 || opportunity.financial_risk?.credit_limit_blocked,
+      subrent_required: opportunity.economic_assessment?.subrent_required ?? false,
+      manager_promise_overdue: Boolean(
+        opportunity.next_step?.due_at && new Date(opportunity.next_step.due_at).getTime() < Date.now(),
+      ),
+    },
+    counters: {
+      communication_events: events.length,
+      competitor_mentions: competitorEvents.length,
+      debt_markers: debtRiskEvents.length,
+      subrent_markers: subrentEvents.length,
+      promise_markers: promiseEvents.length,
+      ignored_noise_events: noiseEvents.length,
+    },
+    evidence: {
+      competitor: competitorEvents.slice(0, 5),
+      debt_risk: debtRiskEvents.slice(0, 5),
+      subrent: subrentEvents.slice(0, 5),
+      manager_promises: promiseEvents.slice(0, 5),
+      ignored_noise: noiseEvents.slice(0, 5),
+    },
+  };
+}
+
 export async function buildManagerDashboard() {
   const opportunities = await repository.listOpportunities();
   return opportunities
@@ -353,6 +437,7 @@ export async function buildOpportunityCard(opportunityId) {
   const recommendationsHistory = await repository.listRecommendations(opportunityId);
   const graph = buildOpportunityGraph(opportunity);
   const similarCases = await getSimilarCases(opportunity, repository);
+  const riskEvidence = collectSignalEvidence(opportunity);
 
   return {
     opportunity_id: opportunity.id,
@@ -381,6 +466,7 @@ export async function buildOpportunityCard(opportunityId) {
       explainability: decision.explainability,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
+    risk_evidence: riskEvidence,
     similar_cases: similarCases,
     recommendations_history: recommendationsHistory,
     state_history: stateHistory,
