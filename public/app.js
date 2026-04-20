@@ -236,6 +236,7 @@ function renderOwnerDashboard(items) {
 
 function renderQualityDashboard(payload) {
   const summary = payload.summary ?? {};
+  const criticalFields = summary.critical_fields ?? [];
   els.qualitySummary.innerHTML = `
     <div class="stat-card">
       <span class="stat-label">Opportunities</span>
@@ -261,15 +262,37 @@ function renderQualityDashboard(payload) {
       <span class="stat-label">Failed Ingest</span>
       <strong>${summary.failed_ingest_events ?? 0}</strong>
     </div>
+    ${criticalFields.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.label}</span>
+        <strong>${item.filled_percent}%</strong>
+      </div>
+    `).join('')}
   `;
 
   const items = payload.items ?? [];
+  const criticalFieldsHtml = criticalFields.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Критичные поля Opportunity Unit</h3>
+            <div class="queue-subtitle">Покрытие обязательных полей из ТЗ</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${criticalFields.map((item) => `<span class="badge badge-${item.status === 'ok' ? 'low' : item.status === 'warning' ? 'high' : 'critical'}">${item.label}: ${item.filled_percent}%</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
+
   if (!items.length) {
-    els.qualityList.innerHTML = '<div class="empty">Критичных проблем качества данных сейчас нет.</div>';
+    els.qualityList.innerHTML = `${criticalFieldsHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
     return;
   }
 
-  els.qualityList.innerHTML = items.slice(0, 8).map((item) => `
+  els.qualityList.innerHTML = criticalFieldsHtml + items.slice(0, 8).map((item) => `
     <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
       <div class="queue-top">
         <div>

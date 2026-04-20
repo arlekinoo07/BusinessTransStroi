@@ -497,9 +497,13 @@ function buildQualityIssues(opportunity) {
   if (!opportunity.company?.normalized_value) issues.push('company_not_normalized');
   if (!opportunity.project_object?.normalized_value) issues.push('object_not_normalized');
   if (!opportunity.equipment_type?.normalized_value) issues.push('equipment_missing');
+  if (!opportunity.time_window?.start_at) issues.push('start_date_missing');
+  if (!opportunity.time_window?.duration_days) issues.push('duration_missing');
+  if (!opportunity.owner_manager?.external_id) issues.push('owner_manager_missing');
   if (!opportunity.next_step?.code && !opportunity.next_step?.description) issues.push('next_step_missing');
   if (!opportunity.last_touch_at) issues.push('last_touch_missing');
   if (!(opportunity.communication_events ?? []).length) issues.push('no_linked_events');
+  if (!(opportunity.communication_events ?? []).some((item) => item.channel)) issues.push('channel_missing');
   return issues;
 }
 
@@ -515,6 +519,69 @@ export async function buildDataQualityDashboard() {
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
   const missingEquipment = opportunities.filter((item) => !item.equipment_type?.normalized_value).length;
+  const coverageMetrics = [
+    {
+      field_code: 'client',
+      label: 'Клиент',
+      filled_count: opportunities.filter((item) => item.company?.normalized_value).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'object',
+      label: 'Объект',
+      filled_count: opportunities.filter((item) => item.project_object?.normalized_value).length,
+      target_percent: 85,
+    },
+    {
+      field_code: 'equipment_type',
+      label: 'Тип техники',
+      filled_count: opportunities.filter((item) => item.equipment_type?.normalized_value).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'requested_start_at',
+      label: 'Предполагаемая дата',
+      filled_count: opportunities.filter((item) => item.time_window?.start_at).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'duration_days',
+      label: 'Длительность',
+      filled_count: opportunities.filter((item) => item.time_window?.duration_days).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'channel',
+      label: 'Канал связи',
+      filled_count: opportunities.filter((item) => (item.communication_events ?? []).some((event) => event.channel)).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'last_touch_at',
+      label: 'Последнее касание',
+      filled_count: opportunities.filter((item) => item.last_touch_at).length,
+      target_percent: 90,
+    },
+    {
+      field_code: 'owner_manager',
+      label: 'Ответственный',
+      filled_count: opportunities.filter((item) => item.owner_manager?.external_id).length,
+      target_percent: 95,
+    },
+    {
+      field_code: 'next_step',
+      label: 'Следующий шаг',
+      filled_count: opportunities.filter((item) => item.next_step?.code || item.next_step?.description).length,
+      target_percent: 95,
+    },
+  ].map((item) => {
+    const filledPercent = Math.round((item.filled_count / totalOpportunities) * 100);
+    return {
+      ...item,
+      filled_percent: filledPercent,
+      status: filledPercent >= item.target_percent ? 'ok' : filledPercent >= Math.max(50, item.target_percent - 20) ? 'warning' : 'critical',
+    };
+  });
 
   const items = opportunities
     .map((opportunity) => {
@@ -539,6 +606,7 @@ export async function buildDataQualityDashboard() {
       opportunities_missing_equipment: missingEquipment,
       failed_ingest_events: failedIngest.length,
       normalization_records: normalizationResults.length,
+      critical_fields: coverageMetrics,
     },
     items,
   };
