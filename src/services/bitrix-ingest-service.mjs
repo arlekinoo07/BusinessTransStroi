@@ -95,6 +95,10 @@ function mapEventTypeToChannel(entityType) {
   return 'bitrix_event';
 }
 
+function isGenericBitrixSubject(value) {
+  return /^комментарий сделки\s+\d+$/i.test(String(value ?? '').trim());
+}
+
 export function normalizeBitrixEvent(payload) {
   return {
     source: payload.source ?? 'bitrix24',
@@ -207,6 +211,9 @@ export function buildBitrixEntityPatch(event) {
     const extracted = extractEntitiesFromText(text);
     const ownerType = firstNonEmpty(record.OWNER_TYPE_ID, record.ENTITY_TYPE, '');
     const explicitDealId = firstNonEmpty(record.DEAL_ID, isDealOwnerType(ownerType) ? record.OWNER_ID : null);
+    const summaryText = isGenericBitrixSubject(record.SUBJECT)
+      ? firstNonEmpty(record.COMMENT, record.DESCRIPTION, record.TEXT, record.SUBJECT)
+      : firstNonEmpty(record.COMMENT, record.DESCRIPTION, record.SUBJECT, record.TEXT);
     return {
       kind: 'communication_event',
       external_id: String(record.ID ?? event.entity_id),
@@ -223,7 +230,7 @@ export function buildBitrixEntityPatch(event) {
       event_type: event.entity_type,
       event_datetime: toIsoDate(firstNonEmpty(record.CREATED, record.CREATED_AT, event.occurred_at)),
       channel: mapEventTypeToChannel(event.entity_type),
-      summary_text: firstNonEmpty(record.SUBJECT, record.COMMENT, record.DESCRIPTION),
+      summary_text: summaryText,
       raw_text: text,
       requested_start_at: extracted.requested_start_at,
       requested_duration_days: extracted.requested_duration_days,

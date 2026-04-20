@@ -32,6 +32,18 @@ const NEXT_STEP_MARKERS = [
   ['позвонить', 'sales_call'],
 ];
 const OBJECT_KEYWORDS = ['жк', 'бц', 'тц', 'трц', 'ск', 'объект', 'площадка', 'стройка', 'склад', 'завод'];
+const SYSTEM_NOISE_MARKERS = [
+  'приоритетность сделки',
+  'категория зрелости',
+  'вектор зрелости',
+  'need score',
+  'time score',
+  'spec score',
+  'access score',
+  'money score',
+  'fit score',
+  'no next tag',
+];
 const MONTH_MAP = new Map([
   ['января', 0],
   ['февраля', 1],
@@ -326,12 +338,39 @@ function detectRequestedStartAt(sourceText) {
   return parseDateHint(scheduleSentence);
 }
 
+function detectNoise(sourceText) {
+  const lowered = sourceText.toLowerCase();
+  const matchedMarkers = SYSTEM_NOISE_MARKERS.filter((marker) => lowered.includes(marker));
+  if (matchedMarkers.length >= 2) {
+    return {
+      is_noise: true,
+      reason: 'system_priority_annotation',
+      markers: matchedMarkers,
+    };
+  }
+
+  if (/^комментарий сделки\s+\d+$/i.test(sourceText.trim())) {
+    return {
+      is_noise: true,
+      reason: 'generic_subject_only',
+      markers: ['комментарий сделки'],
+    };
+  }
+
+  return {
+    is_noise: false,
+    reason: null,
+    markers: [],
+  };
+}
+
 export function extractEntitiesFromText(text) {
   const sourceText = cleanText(text);
   const nextStep = detectNextStep(sourceText);
   const managerPromise = detectManagerPromise(sourceText);
   const requestedStartAt = detectRequestedStartAt(sourceText);
   const requestedDurationDays = parseDurationHint(sourceText);
+  const noise = detectNoise(sourceText);
 
   return {
     company: detectCompany(sourceText),
@@ -349,6 +388,9 @@ export function extractEntitiesFromText(text) {
     manager_promise: managerPromise,
     requested_start_at: requestedStartAt,
     requested_duration_days: requestedDurationDays,
+    is_noise: noise.is_noise,
+    noise_reason: noise.reason,
+    noise_markers: noise.markers,
     extracted_at: new Date().toISOString(),
   };
 }

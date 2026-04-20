@@ -454,6 +454,10 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
     return;
   }
 
+  if (patch.extraction_json?.is_noise === true) {
+    return;
+  }
+
   const fallbackRef = patch.opportunity_external_id ?? patch.external_id;
   const companyId = await upsertCompanyFromPatch(client, patch, fallbackRef);
   const personId = await upsertPersonFromPatch(client, patch, companyId, fallbackRef);
