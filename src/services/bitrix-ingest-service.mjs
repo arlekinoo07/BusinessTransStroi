@@ -237,6 +237,10 @@ export function buildBitrixEntityPatch(event) {
       next_step_code: extracted.next_touch_action_code,
       next_step_due_at: extracted.next_touch_due_at ?? extracted.manager_promise?.due_at ?? null,
       next_step_description: extracted.next_touch_hint ?? extracted.manager_promise?.raw_value ?? null,
+      subrent_required: extracted.supply_mode === 'subrent' ? true : null,
+      competitor_present: extracted.competitor?.mentioned ? true : null,
+      debt_risk_flag: extracted.debt_risk?.mentioned ? true : null,
+      credit_limit_blocked: extracted.debt_risk?.markers?.some((marker) => marker.includes('лимит')) ? true : null,
       extraction_json: {
         ...extracted,
         author_external_id: firstNonEmpty(record.AUTHOR_ID, record.CREATED_BY_ID, record.RESPONSIBLE_ID),

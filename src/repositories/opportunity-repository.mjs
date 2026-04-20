@@ -443,6 +443,19 @@ export class InMemoryOpportunityRepository {
               due_at: patch.next_step_due_at ?? opportunity.next_step?.due_at ?? null,
               description: patch.next_step_description ?? opportunity.next_step?.description ?? null,
             };
+            opportunity.economic_assessment = {
+              ...opportunity.economic_assessment,
+              subrent_required: patch.subrent_required ?? opportunity.economic_assessment?.subrent_required ?? null,
+            };
+            opportunity.financial_risk = {
+              ...opportunity.financial_risk,
+              credit_limit_blocked: patch.credit_limit_blocked ?? opportunity.financial_risk?.credit_limit_blocked ?? false,
+              debt_overdue_days: patch.debt_risk_flag ? Math.max(opportunity.financial_risk?.debt_overdue_days ?? 0, 1) : opportunity.financial_risk?.debt_overdue_days ?? null,
+            };
+            opportunity.graph_signals = {
+              ...opportunity.graph_signals,
+              competitor_present: patch.competitor_present ?? opportunity.graph_signals?.competitor_present ?? false,
+            };
           }
           opportunity.communication_events.unshift({
             id: patch.external_id,

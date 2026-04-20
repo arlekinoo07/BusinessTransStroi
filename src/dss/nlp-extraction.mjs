@@ -10,6 +10,7 @@ const URGENCY_MARKERS = ['срочно', 'сегодня', 'завтра', 'ут
 const MONEY_MARKERS = ['кп', 'коммерческое', 'договор', 'счет', 'счёт', 'оплата', 'аванс', 'смета'];
 const COMPETITOR_MARKERS = ['конкурент', 'дешевле у', 'другая компания', 'уже стоят', 'конкуренты'];
 const SUBRENT_MARKERS = ['субаренда', 'партнер', 'партнёр'];
+const DEBT_RISK_MARKERS = ['дебитор', 'дебиторка', 'просрочка', 'долг', 'не платят', 'задержка оплаты', 'лимит', 'стоп по отгрузке', 'только по предоплате'];
 const NEXT_STEP_MARKERS = [
   ['отправить кп', 'send_offer'],
   ['выслать кп', 'send_offer'],
@@ -209,6 +210,18 @@ function detectSupplyMode(text) {
   return 'unknown';
 }
 
+function detectDebtRisk(text) {
+  const lowered = text.toLowerCase();
+  const matched = DEBT_RISK_MARKERS.filter((marker) => lowered.includes(marker));
+  const prepaymentOnly = lowered.includes('предоплат');
+  return {
+    mentioned: matched.length > 0,
+    markers: matched,
+    requires_prepayment: prepaymentOnly,
+    confidence: matched.length ? 0.82 : 0.25,
+  };
+}
+
 function detectLabeledEntity(sourceText, regex, normalizer) {
   const match = findMatch(sourceText, regex);
   return match?.value ? normalizer(match.value) : null;
@@ -257,7 +270,19 @@ function detectObject(sourceText) {
     return OBJECT_KEYWORDS.some((keyword) => lowered.includes(keyword));
   });
 
-  return sentence ? normalizeObjectName(sentence.replace(/^(на|по)\s+/i, '')) : null;
+  if (!sentence) {
+    return null;
+  }
+
+  const cleaned = sentence.replace(/^(на|по)\s+/i, '').trim();
+  const lowered = cleaned.toLowerCase();
+  const genericOnly = (
+    (lowered.includes('объект') || lowered.includes('площадк'))
+    && !OBJECT_KEYWORDS.some((keyword) => keyword !== 'объект' && keyword !== 'площадка' && lowered.includes(keyword))
+    && (lowered.includes('конкурент') || lowered.includes('уже стоит') || lowered.includes('люди конкурента'))
+  );
+
+  return genericOnly ? null : normalizeObjectName(cleaned);
 }
 
 function detectAddress(sourceText) {
@@ -382,6 +407,7 @@ export function extractEntitiesFromText(text) {
     money_readiness: detectMoneyReadiness(sourceText),
     competitor: detectCompetitor(sourceText),
     supply_mode: detectSupplyMode(sourceText),
+    debt_risk: detectDebtRisk(sourceText),
     next_touch_hint: nextStep.raw_value,
     next_touch_action_code: nextStep.action_code,
     next_touch_due_at: nextStep.due_at,

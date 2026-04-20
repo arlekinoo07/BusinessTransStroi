@@ -22,6 +22,11 @@ function toNormalization(row, prefix) {
 }
 
 function mapOpportunityRow(row, communicationEvents = []) {
+  const competitorPresent = communicationEvents.some((event) => event.extraction_json?.competitor?.mentioned === true);
+  const subrentRequiredFromEvents = communicationEvents.some((event) => event.extraction_json?.supply_mode === 'subrent');
+  const debtRiskFromEvents = communicationEvents.some((event) => event.extraction_json?.debt_risk?.mentioned === true);
+  const creditLimitFromEvents = communicationEvents.some((event) =>
+    (event.extraction_json?.debt_risk?.markers ?? []).some((marker) => marker.includes('лимит')));
   return {
     id: row.external_opportunity_id || row.id,
     bitrix_deal_id: row.bitrix_deal_id,
@@ -66,11 +71,11 @@ function mapOpportunityRow(row, communicationEvents = []) {
     economic_assessment: {
       expected_margin_percent: row.expected_margin_percent !== null ? Number(row.expected_margin_percent) : null,
       own_equipment_available: row.own_equipment_available,
-      subrent_required: row.subrent_required,
+      subrent_required: row.subrent_required ?? subrentRequiredFromEvents,
     },
     financial_risk: {
-      debt_overdue_days: row.debt_overdue_days,
-      credit_limit_blocked: row.credit_limit_blocked,
+      debt_overdue_days: row.debt_overdue_days ?? (debtRiskFromEvents ? 1 : null),
+      credit_limit_blocked: row.credit_limit_blocked || creditLimitFromEvents,
       client_blacklisted: row.client_blacklisted,
     },
     owner_manager: row.owner_manager_full_name
@@ -98,7 +103,7 @@ function mapOpportunityRow(row, communicationEvents = []) {
     sla_hours: row.sla_hours,
     graph_signals: {
       cross_sell_open: false,
-      competitor_present: false,
+      competitor_present: competitorPresent,
     },
     communication_events: communicationEvents,
   };
@@ -478,6 +483,8 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
         next_step_due_at = COALESCE(next_step_due_at, $9),
         next_step_description = COALESCE(next_step_description, $10),
         last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($11, '-infinity'::timestamptz)),
+        subrent_required = COALESCE(subrent_required, $12),
+        credit_limit_blocked = COALESCE(credit_limit_blocked, $13),
         updated_at = NOW()
       WHERE id = $1
     `,
@@ -493,6 +500,8 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
       patch.next_step_due_at ?? null,
       patch.next_step_description ?? null,
       patch.event_datetime ?? null,
+      patch.subrent_required ?? null,
+      patch.credit_limit_blocked ?? null,
     ],
   );
 }

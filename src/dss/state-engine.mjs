@@ -125,16 +125,19 @@ export function evaluateOpportunityState(opportunity) {
   const lastTouchHours = opportunity.last_touch_at
     ? (Date.now() - new Date(opportunity.last_touch_at).getTime()) / 3_600_000
     : null;
+  const ownEquipmentAvailable = opportunity.economic_assessment?.own_equipment_available === true;
+  const subrentRequired = opportunity.economic_assessment?.subrent_required === true;
+  const debtRiskDetected = (opportunity.financial_risk?.debt_overdue_days ?? 0) > 0 || opportunity.financial_risk?.credit_limit_blocked;
 
   if (scores.need >= 4 && scores.time >= 4 && scores.money >= 3) {
     addState(states, 'hot_urgent', 'Потребность конкретная, окно мобилизации близко, клиент дошел до коммерческой стадии.', 0.88);
   }
 
-  if (scores.fit >= 4 && opportunity.economic_assessment?.own_equipment_available) {
+  if (scores.fit >= 4 && ownEquipmentAvailable) {
     addState(states, 'hot_own_equipment', 'Сделка хорошо ложится на свой парк и свою экономику.', 0.86);
   }
 
-  if (scores.need >= 4 && !opportunity.economic_assessment?.own_equipment_available) {
+  if (scores.need >= 4 && subrentRequired) {
     addState(states, 'hot_subrent_only', 'Сделка живая, но своя техника недоступна.', 0.79);
   }
 
@@ -152,6 +155,8 @@ export function evaluateOpportunityState(opportunity) {
 
   if ((opportunity.financial_risk?.debt_overdue_days ?? 0) > 15 || opportunity.financial_risk?.credit_limit_blocked) {
     addState(states, 'debt_risk', 'У клиента есть финансовые ограничения или просрочка.', 0.89);
+  } else if (debtRiskDetected) {
+    addState(states, 'debt_risk', 'В коммуникациях замечены признаки риска оплаты, нужна проверка условий.', 0.72);
   }
 
   if (opportunity.graph_signals?.cross_sell_open) {
