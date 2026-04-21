@@ -154,6 +154,16 @@ export const managerQueueItemSchema = {
         fit: { type: 'number' },
       },
     },
+    action_effectiveness: {
+      type: ['object', 'null'],
+      properties: {
+        action_code: { type: 'string' },
+        total: { type: 'number' },
+        accepted_rate: { type: 'number' },
+        executed_rate: { type: 'number' },
+        rejected_rate: { type: 'number' },
+      },
+    },
   },
 };
 
@@ -199,6 +209,7 @@ export const opportunityCardSchema = {
         deadline_at: { type: ['string', 'null'], format: 'date-time' },
         escalation_action_code: { type: ['string', 'null'] },
         explainability: { type: 'object' },
+        action_effectiveness: managerQueueItemSchema.properties.action_effectiveness,
       },
     },
     risk_evidence: {

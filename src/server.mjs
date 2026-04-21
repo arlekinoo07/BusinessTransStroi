@@ -138,6 +138,11 @@ function buildQueueItem(opportunity, state, decision) {
   };
 }
 
+async function getActionEffectivenessMap() {
+  const feedback = await repository.getFeedbackLearningSummary(50);
+  return new Map((feedback.action_metrics ?? []).map((item) => [item.action_code, item]));
+}
+
 function collectSignalEvidence(opportunity) {
   const events = opportunity.communication_events ?? [];
   const competitorEvents = [];
@@ -275,17 +280,22 @@ function buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHis
 }
 
 export async function buildManagerDashboard() {
+  const actionEffectiveness = await getActionEffectivenessMap();
   const opportunities = await repository.listOpportunities();
   return opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
       const decision = decideNextAction(state);
-      return buildQueueItem(opportunity, state, decision);
+      return {
+        ...buildQueueItem(opportunity, state, decision),
+        action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
+      };
     })
     .sort((left, right) => right.priority_score - left.priority_score);
 }
 
 export async function buildRopDashboard() {
+  const actionEffectiveness = await getActionEffectivenessMap();
   const opportunities = await repository.listOpportunities();
   return opportunities
     .map((opportunity) => {
@@ -323,6 +333,7 @@ export async function buildRopDashboard() {
         recommended_action: decision.recommended_action?.action_name ?? null,
         recommendation_status: decision.escalation_action?.action_code ? 'needs_approval' : 'monitor',
         deadline_at: decision.deadline_at,
+        action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
         evidence_summary: {
           competitor_mentions: riskEvidence.counters.competitor_mentions,
           debt_markers: riskEvidence.counters.debt_markers,
@@ -505,6 +516,7 @@ export async function buildOpportunityCard(opportunityId) {
   const similarCases = await getSimilarCases(opportunity, repository);
   const riskEvidence = collectSignalEvidence(opportunity);
   const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
+  const actionEffectiveness = await getActionEffectivenessMap();
 
   return {
     opportunity_id: opportunity.id,
@@ -531,6 +543,7 @@ export async function buildOpportunityCard(opportunityId) {
       deadline_at: decision.deadline_at,
       escalation_action_code: decision.escalation_action?.action_code ?? null,
       explainability: decision.explainability,
+      action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,

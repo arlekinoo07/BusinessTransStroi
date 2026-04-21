@@ -114,6 +114,8 @@ function renderQueue(items) {
       <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
+        ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}
       </div>
       <div class="score-row">
         ${Object.entries(item.score_vector).map(([key, value]) => `<span class="score-pill">${key}: ${value}</span>`).join('')}
@@ -159,6 +161,8 @@ function renderRopEscalations(items) {
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
         ${(item.evidence_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
+        ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
+        ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}
       </div>
     </article>
   `).join('');
@@ -639,6 +643,8 @@ function renderCard(card) {
             Роль: card.recommendation.target_role,
             Дедлайн: formatDateTime(card.recommendation.deadline_at),
             Эскалация: card.recommendation.escalation_action_code,
+            'Accept rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—',
+            'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
           })}
         </dl>
         <div class="action-row">
