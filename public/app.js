@@ -642,6 +642,40 @@ function renderDecisionTimeline(items) {
   `;
 }
 
+function renderFeedbackHistory(items) {
+  if (!items?.length) {
+    return '<div class="empty">Feedback по рекомендации пока нет.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => {
+        let status = 'shown';
+        if (item.executed) status = 'executed';
+        else if (item.accepted) status = 'accepted';
+        else if (item.rejected) status = 'rejected';
+
+        return `
+          <div class="history-item">
+            <strong>${item.action_code ?? 'recommendation'} · ${status}</strong>
+            <div class="muted">${formatDateTime(item.recorded_at)}</div>
+            <div>${item.rejection_reason ?? item.deal_result ?? '—'}</div>
+            <div class="badge-row">
+              ${item.effect_after_1_day ? '<span class="badge badge-low">1d</span>' : ''}
+              ${item.effect_after_3_days ? '<span class="badge badge-low">3d</span>' : ''}
+              ${item.effect_after_7_days ? '<span class="badge badge-low">7d</span>' : ''}
+              ${item.effect_after_30_days ? '<span class="badge badge-low">30d</span>' : ''}
+            </div>
+            <div class="muted">
+              ${item.effect_after_1_day ?? item.effect_after_3_days ?? item.effect_after_7_days ?? item.effect_after_30_days ?? ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function getFeedbackFormValues() {
   return {
     deal_result: document.querySelector('#feedbackDealResult')?.value?.trim() || null,
@@ -756,6 +790,11 @@ function renderCard(card) {
         <p class="panel-kicker">Decision Timeline</p>
         <h3>Хронология решений и feedback</h3>
         ${renderDecisionTimeline(card.decision_timeline)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Feedback History</p>
+        <h3>Эффект рекомендаций</h3>
+        ${renderFeedbackHistory(card.feedback_history)}
       </section>
       <section class="card-section full">
         <p class="panel-kicker">Communication History</p>
