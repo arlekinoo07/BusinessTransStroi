@@ -435,6 +435,7 @@ export async function buildLogisticsDashboard({ limit = 20, mode = '' } = {}) {
 }
 
 export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
+  const feedback = await repository.getFeedbackLearningSummary(50);
   const opportunities = await repository.listOpportunities();
   const items = opportunities
     .map((opportunity) => {
@@ -483,7 +484,30 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
     .sort((left, right) => right.priority_score - left.priority_score)
     .slice(0, limit);
 
-  return items;
+  const totalOpportunities = opportunities.length || 1;
+  const ownEquipmentCount = opportunities.filter((item) => item.economic_assessment?.own_equipment_available === true).length;
+  const subrentCount = opportunities.filter((item) => item.economic_assessment?.subrent_required === true).length;
+  const debtRiskCount = opportunities.filter((item) =>
+    (item.financial_risk?.debt_overdue_days ?? 0) > 0 || item.financial_risk?.credit_limit_blocked).length;
+  const avgMarginSource = opportunities
+    .map((item) => item.economic_assessment?.expected_margin_percent)
+    .filter((value) => value !== null && value !== undefined);
+  const averageMargin = avgMarginSource.length
+    ? Number((avgMarginSource.reduce((sum, value) => sum + value, 0) / avgMarginSource.length).toFixed(1))
+    : null;
+
+  return {
+    summary: {
+      total_opportunities: opportunities.length,
+      own_equipment_share: Math.round((ownEquipmentCount / totalOpportunities) * 100),
+      subrent_dependency_share: Math.round((subrentCount / totalOpportunities) * 100),
+      debt_exposure_share: Math.round((debtRiskCount / totalOpportunities) * 100),
+      average_margin_percent: averageMargin,
+      recommendation_accepted_rate: Math.round((feedback.summary?.accepted_rate ?? 0) * 100),
+      recommendation_executed_rate: Math.round((feedback.summary?.executed_rate ?? 0) * 100),
+    },
+    items,
+  };
 }
 
 export async function buildManagerQueue({ limit = 20, bucket = '', state = '', search = '' } = {}) {
@@ -1050,12 +1074,10 @@ export function createAppServer() {
       if (request.method === 'GET' && url.pathname === '/dashboard/owner') {
         const denied = requirePermission(auth, 'dashboard.owner');
         if (denied) return sendJson(response, 403, denied);
-        return sendJson(response, 200, {
-          items: await buildOwnerDashboard({
-            limit: Number(url.searchParams.get('limit') ?? 20),
-            strategy: url.searchParams.get('strategy') ?? '',
-          }),
-        });
+        return sendJson(response, 200, await buildOwnerDashboard({
+          limit: Number(url.searchParams.get('limit') ?? 20),
+          strategy: url.searchParams.get('strategy') ?? '',
+        }));
       }
 
       if (request.method === 'GET' && url.pathname === '/dashboard/data-quality') {

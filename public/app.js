@@ -24,6 +24,7 @@ const els = {
   feedbackRecentList: document.querySelector('#feedbackRecentList'),
   auditList: document.querySelector('#auditList'),
   logisticsList: document.querySelector('#logisticsList'),
+  ownerSummary: document.querySelector('#ownerSummary'),
   ownerList: document.querySelector('#ownerList'),
   cardView: document.querySelector('#cardView'),
   pendingList: document.querySelector('#pendingList'),
@@ -210,7 +211,37 @@ function renderLogisticsQueue(items) {
   });
 }
 
-function renderOwnerDashboard(items) {
+function renderOwnerDashboard(payload) {
+  const summary = payload.summary ?? {};
+  const items = payload.items ?? [];
+
+  els.ownerSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Own Fleet Share</span>
+      <strong>${summary.own_equipment_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Subrent Dependency</span>
+      <strong>${summary.subrent_dependency_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Debt Exposure</span>
+      <strong>${summary.debt_exposure_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Avg Margin</span>
+      <strong>${summary.average_margin_percent ?? '—'}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accepted</span>
+      <strong>${summary.recommendation_accepted_rate ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Executed</span>
+      <strong>${summary.recommendation_executed_rate ?? 0}%</strong>
+    </div>
+  `;
+
   if (!items.length) {
     els.ownerList.innerHTML = '<div class="empty">Стратегических отклонений сейчас нет.</div>';
     return;
@@ -860,9 +891,9 @@ async function loadLogisticsDashboard() {
 async function loadOwnerDashboard() {
   const params = new URLSearchParams({ limit: '12' });
   if (els.ownerStrategy.value) params.set('strategy', els.ownerStrategy.value);
-  const data = await api(`/dashboard/owner?${params.toString()}`);
-  renderOwnerDashboard(data.items);
-  return data.items;
+  const payload = await api(`/dashboard/owner?${params.toString()}`);
+  renderOwnerDashboard(payload);
+  return payload.items ?? [];
 }
 
 async function refreshAll() {

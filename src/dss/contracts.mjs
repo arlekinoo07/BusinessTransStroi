@@ -383,6 +383,28 @@ export const ownerDashboardItemSchema = {
   },
 };
 
+export const ownerDashboardSchema = {
+  type: 'object',
+  properties: {
+    summary: {
+      type: 'object',
+      properties: {
+        total_opportunities: { type: 'number' },
+        own_equipment_share: { type: 'number' },
+        subrent_dependency_share: { type: 'number' },
+        debt_exposure_share: { type: 'number' },
+        average_margin_percent: { type: ['number', 'null'] },
+        recommendation_accepted_rate: { type: 'number' },
+        recommendation_executed_rate: { type: 'number' },
+      },
+    },
+    items: {
+      type: 'array',
+      items: ownerDashboardItemSchema,
+    },
+  },
+};
+
 export const dataQualitySchema = {
   type: 'object',
   properties: {
@@ -512,6 +534,7 @@ export function getContractsOverview() {
     rop_escalation_item: ropEscalationItemSchema,
     logistics_queue_item: logisticsQueueItemSchema,
     owner_dashboard_item: ownerDashboardItemSchema,
+    owner_dashboard: ownerDashboardSchema,
     data_quality: dataQualitySchema,
     feedback_learning: feedbackLearningSchema,
     graph_view: graphViewSchema,
