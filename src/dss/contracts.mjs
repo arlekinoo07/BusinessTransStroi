@@ -278,6 +278,19 @@ export const ropEscalationItemSchema = {
     recommended_action: { type: ['string', 'null'] },
     recommendation_status: { type: ['string', 'null'] },
     deadline_at: { type: ['string', 'null'], format: 'date-time' },
+    evidence_summary: {
+      type: 'object',
+      properties: {
+        competitor_mentions: { type: 'number' },
+        debt_markers: { type: 'number' },
+        subrent_markers: { type: 'number' },
+        promise_markers: { type: 'number' },
+      },
+    },
+    evidence_markers: {
+      type: 'array',
+      items: { type: 'string' },
+    },
     state_codes: {
       type: 'array',
       items: { type: 'string' },

@@ -239,6 +239,7 @@ export async function buildRopDashboard() {
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
       const decision = decideNextAction(state);
+      const riskEvidence = collectSignalEvidence(opportunity);
       let escalationType = 'monitor';
       let escalationReason = state.states[0]?.reason ?? 'Требует внимания РОПа.';
 
@@ -270,6 +271,18 @@ export async function buildRopDashboard() {
         recommended_action: decision.recommended_action?.action_name ?? null,
         recommendation_status: decision.escalation_action?.action_code ? 'needs_approval' : 'monitor',
         deadline_at: decision.deadline_at,
+        evidence_summary: {
+          competitor_mentions: riskEvidence.counters.competitor_mentions,
+          debt_markers: riskEvidence.counters.debt_markers,
+          subrent_markers: riskEvidence.counters.subrent_markers,
+          promise_markers: riskEvidence.counters.promise_markers,
+        },
+        evidence_markers: [
+          ...riskEvidence.evidence.competitor.flatMap((item) => item.markers ?? []),
+          ...riskEvidence.evidence.debt_risk.flatMap((item) => item.markers ?? []),
+          ...(riskEvidence.flags.subrent_required ? ['subrent'] : []),
+          ...(riskEvidence.flags.manager_promise_overdue ? ['promise_overdue'] : []),
+        ].filter(Boolean).slice(0, 8),
       };
     })
     .filter((item) =>

@@ -149,8 +149,16 @@ function renderRopEscalations(items) {
         <span class="pill">Deadline: ${formatDateTime(item.deadline_at)}</span>
       </div>
       <div class="muted">${item.escalation_reason ?? 'Причина не указана'}</div>
+      <div class="muted">
+        evidence:
+        competitor ${item.evidence_summary?.competitor_mentions ?? 0},
+        debt ${item.evidence_summary?.debt_markers ?? 0},
+        subrent ${item.evidence_summary?.subrent_markers ?? 0},
+        promises ${item.evidence_summary?.promise_markers ?? 0}
+      </div>
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${(item.evidence_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
       </div>
     </article>
   `).join('');
