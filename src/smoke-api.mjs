@@ -48,6 +48,8 @@ async function main() {
     manager_items: managerDashboard.length,
     rop_items: ropDashboard.length,
     top_manager_item: managerDashboard[0],
+    top_manager_loss_risk: managerDashboard[0]?.loss_risk_level ?? null,
+    top_manager_alternative: managerDashboard[0]?.alternative_action ?? null,
     target_opportunity_id: targetOpportunityId,
     manager_queue_items: managerQueue.length,
     rop_escalation_items: ropEscalations.length,

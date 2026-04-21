@@ -113,10 +113,13 @@ function renderQueue(items) {
         <span class="pill">Дедлайн: ${formatDateTime(item.deadline_at)}</span>
       </div>
       <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
+      ${item.loss_risk_reason ? `<div class="muted">loss risk (${item.loss_risk_level ?? '—'}): ${item.loss_risk_reason}</div>` : ''}
+      ${item.alternative_action ? `<div class="muted">alternative: ${item.alternative_action}</div>` : ''}
       ${item.why_blocked?.length ? `<div class="muted">blocked: ${item.why_blocked.join(' · ')}</div>` : ''}
       ${item.why_low_priority?.length ? `<div class="muted">low priority: ${item.why_low_priority.join(' · ')}</div>` : ''}
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${item.loss_risk_level ? `<span class="badge badge-low">loss ${item.loss_risk_level}</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}
       </div>

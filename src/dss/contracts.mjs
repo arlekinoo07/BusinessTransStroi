@@ -138,6 +138,9 @@ export const managerQueueItemSchema = {
     next_action_code: { type: ['string', 'null'] },
     why_now: { type: ['string', 'null'] },
     risk_summary: { type: ['string', 'null'] },
+    loss_risk_level: { type: ['string', 'null'] },
+    loss_risk_reason: { type: ['string', 'null'] },
+    alternative_action: { type: ['string', 'null'] },
     deadline_at: { type: ['string', 'null'], format: 'date-time' },
     state_codes: {
       type: 'array',

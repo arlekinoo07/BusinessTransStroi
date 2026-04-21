@@ -120,9 +120,90 @@ function toPriorityBucket(priorityScore) {
   return 'low';
 }
 
+function buildLossRiskSummary(opportunity, state) {
+  if (state.states.some((item) => item.state_code === 'hot_unworked')) {
+    return {
+      level: 'high',
+      reason: 'Сделка горячая, но зависла без реакции в рабочем SLA.',
+    };
+  }
+  if (state.states.some((item) => item.state_code === 'hot_urgent')) {
+    return {
+      level: 'high',
+      reason: 'Окно мобилизации близко, клиент может уйти к конкуренту быстрее обычного.',
+    };
+  }
+  if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
+    return {
+      level: 'medium',
+      reason: 'Реальный спрос есть, но без решения по субаренде сделка быстро уходит.',
+    };
+  }
+  if (state.states.some((item) => item.state_code === 'debt_risk')) {
+    return {
+      level: 'medium',
+      reason: 'Есть риск потерять не сделку, а экономику сделки из-за условий оплаты.',
+    };
+  }
+  if (state.states.some((item) => item.state_code === 'noise_low_priority')) {
+    return {
+      level: 'low',
+      reason: 'Пока мало предметности, поэтому риск потери низкий, но и атаковать рано.',
+    };
+  }
+  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 15
+    && opportunity.economic_assessment?.expected_margin_percent !== null) {
+    return {
+      level: 'low',
+      reason: 'Даже при закрытии сделка пока не даёт нужной экономической ценности.',
+    };
+  }
+  return {
+    level: 'medium',
+    reason: 'Сделка требует контроля, но критичных стоп-сигналов сейчас нет.',
+  };
+}
+
+function buildAlternativeAction(opportunity, state, decision) {
+  const currentActionCode = decision.recommended_action?.action_code ?? null;
+
+  if (currentActionCode === 'send_offer') {
+    if (opportunity.economic_assessment?.own_equipment_available) {
+      return 'Зарезервировать свою технику';
+    }
+    if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
+      return 'Передать в субаренду';
+    }
+  }
+
+  if (currentActionCode === 'clarify_specs') {
+    return 'Позвонить клиенту';
+  }
+
+  if (currentActionCode === 'request_subrent' && opportunity.economic_assessment?.own_equipment_available) {
+    return 'Зарезервировать свою технику';
+  }
+
+  if (currentActionCode === 'sales_call' && opportunity.payment_readiness === 'ready_for_offer') {
+    return 'Отправить КП';
+  }
+
+  if (currentActionCode === 'debt_control') {
+    return 'Эскалировать на руководителя';
+  }
+
+  if (currentActionCode === 'stop_deal' && !state.states.some((item) => item.state_code === 'noise_low_priority')) {
+    return 'Уточнить техпараметры';
+  }
+
+  return null;
+}
+
 function buildQueueItem(opportunity, state, decision) {
   const blockingReasons = [];
   const lowPriorityReasons = [];
+  const lossRisk = buildLossRiskSummary(opportunity, state);
+  const alternativeAction = buildAlternativeAction(opportunity, state, decision);
 
   if (state.states.some((item) => item.state_code === 'spec_missing')) {
     blockingReasons.push('Нужны уточнения по техпараметрам.');
@@ -154,6 +235,9 @@ function buildQueueItem(opportunity, state, decision) {
     next_action_code: decision.recommended_action?.action_code ?? null,
     why_now: decision.explainability.why_important[0] ?? null,
     risk_summary: decision.explainability.risk_if_ignored ?? null,
+    loss_risk_level: lossRisk.level,
+    loss_risk_reason: lossRisk.reason,
+    alternative_action: alternativeAction,
     deadline_at: decision.deadline_at,
     state_codes: state.states.map((item) => item.state_code),
     score_vector: state.scores,
