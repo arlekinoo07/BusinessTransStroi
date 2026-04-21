@@ -164,6 +164,14 @@ export const managerQueueItemSchema = {
         rejected_rate: { type: 'number' },
       },
     },
+    why_blocked: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    why_low_priority: {
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
 };
 

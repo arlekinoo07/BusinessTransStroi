@@ -113,6 +113,8 @@ function renderQueue(items) {
         <span class="pill">Дедлайн: ${formatDateTime(item.deadline_at)}</span>
       </div>
       <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
+      ${item.why_blocked?.length ? `<div class="muted">blocked: ${item.why_blocked.join(' · ')}</div>` : ''}
+      ${item.why_low_priority?.length ? `<div class="muted">low priority: ${item.why_low_priority.join(' · ')}</div>` : ''}
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
         ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}

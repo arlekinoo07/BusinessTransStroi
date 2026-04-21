@@ -121,6 +121,28 @@ function toPriorityBucket(priorityScore) {
 }
 
 function buildQueueItem(opportunity, state, decision) {
+  const blockingReasons = [];
+  const lowPriorityReasons = [];
+
+  if (state.states.some((item) => item.state_code === 'spec_missing')) {
+    blockingReasons.push('Нужны уточнения по техпараметрам.');
+  }
+  if (state.states.some((item) => item.state_code === 'debt_risk')) {
+    blockingReasons.push('Есть риск по оплате или кредитным ограничениям.');
+  }
+  if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
+    blockingReasons.push('Сделка зависит от субаренды.');
+  }
+  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 15 && opportunity.economic_assessment?.expected_margin_percent !== null) {
+    lowPriorityReasons.push('Маржа ниже рабочего порога.');
+  }
+  if (state.states.some((item) => item.state_code === 'noise_low_priority')) {
+    lowPriorityReasons.push('Сделка пока шумовая и слабо конкретизирована.');
+  }
+  if (!opportunity.next_step?.code && !opportunity.next_step?.description) {
+    lowPriorityReasons.push('Не зафиксирован следующий шаг.');
+  }
+
   return {
     opportunity_id: opportunity.id,
     bitrix_deal_id: opportunity.bitrix_deal_id,
@@ -135,6 +157,8 @@ function buildQueueItem(opportunity, state, decision) {
     deadline_at: decision.deadline_at,
     state_codes: state.states.map((item) => item.state_code),
     score_vector: state.scores,
+    why_blocked: blockingReasons,
+    why_low_priority: lowPriorityReasons,
   };
 }
 
