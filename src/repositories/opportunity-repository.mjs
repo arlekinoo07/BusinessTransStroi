@@ -150,6 +150,26 @@ export class InMemoryOpportunityRepository {
     return feedbackStore.map(clone);
   }
 
+  async listFeedbackForOpportunity(opportunityId) {
+    const recommendations = Array.from(recommendationStore.values())
+      .filter((item) => item.opportunity_id === opportunityId)
+      .map(clone);
+    const recommendationIds = new Set(recommendations.map((item) => item.id));
+
+    return feedbackStore
+      .filter((item) => recommendationIds.has(item.action_id))
+      .map((item) => {
+        const recommendation = recommendations.find((candidate) => candidate.id === item.action_id);
+        return {
+          ...clone(item),
+          recommendation_id: item.action_id,
+          opportunity_id: recommendation?.opportunity_id ?? opportunityId,
+          action_code: recommendation?.action_code ?? null,
+        };
+      })
+      .sort((left, right) => new Date(right.recorded_at).getTime() - new Date(left.recorded_at).getTime());
+  }
+
   async saveAuditLog(entry) {
     const log = {
       id: `audit:${auditLogStore.length + 1}`,

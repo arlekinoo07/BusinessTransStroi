@@ -578,6 +578,35 @@ function renderRiskEvidence(evidence) {
   `;
 }
 
+function renderDecisionTimeline(items) {
+  if (!items?.length) {
+    return '<div class="empty">Timeline решений пока пуст.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => `
+        <div class="history-item">
+          <strong>${item.title ?? item.event_type}</strong>
+          <div class="muted">${item.event_type} · ${formatDateTime(item.created_at)}</div>
+          <div>${item.subtitle ?? '—'}</div>
+          ${item.event_type === 'feedback' ? `
+            <div class="badge-row">
+              ${item.payload?.effect_after_1_day ? `<span class="badge badge-low">1d</span>` : ''}
+              ${item.payload?.effect_after_3_days ? `<span class="badge badge-low">3d</span>` : ''}
+              ${item.payload?.effect_after_7_days ? `<span class="badge badge-low">7d</span>` : ''}
+              ${item.payload?.effect_after_30_days ? `<span class="badge badge-low">30d</span>` : ''}
+            </div>
+            <div class="muted">
+              ${item.payload?.effect_after_1_day ?? item.payload?.effect_after_3_days ?? item.payload?.effect_after_7_days ?? item.payload?.effect_after_30_days ?? item.payload?.deal_result ?? ''}
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderCard(card) {
   if (!card) {
     els.cardView.innerHTML = '<div class="empty">Сделка не найдена.</div>';
@@ -663,6 +692,11 @@ function renderCard(card) {
             </div>
           `).join('') || '<div class="empty">История рекомендаций пока пуста.</div>'}
         </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Decision Timeline</p>
+        <h3>Хронология решений и feedback</h3>
+        ${renderDecisionTimeline(card.decision_timeline)}
       </section>
       <section class="card-section full">
         <p class="panel-kicker">Communication History</p>

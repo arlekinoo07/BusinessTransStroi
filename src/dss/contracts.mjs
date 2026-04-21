@@ -238,6 +238,38 @@ export const opportunityCardSchema = {
         },
       },
     },
+    feedback_history: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          recommendation_id: { type: ['string', 'null'] },
+          action_code: { type: ['string', 'null'] },
+          accepted: { type: 'boolean' },
+          rejected: { type: 'boolean' },
+          executed: { type: 'boolean' },
+          deal_result: { type: ['string', 'null'] },
+          effect_after_1_day: { type: ['string', 'null'] },
+          effect_after_3_days: { type: ['string', 'null'] },
+          effect_after_7_days: { type: ['string', 'null'] },
+          effect_after_30_days: { type: ['string', 'null'] },
+          recorded_at: { type: ['string', 'null'], format: 'date-time' },
+        },
+      },
+    },
+    decision_timeline: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          event_type: { type: 'string' },
+          created_at: { type: ['string', 'null'], format: 'date-time' },
+          title: { type: ['string', 'null'] },
+          subtitle: { type: ['string', 'null'] },
+          payload: { type: 'object' },
+        },
+      },
+    },
     recommendations_history: {
       type: 'array',
       items: {

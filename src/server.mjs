@@ -222,6 +222,58 @@ function collectSignalEvidence(opportunity) {
   };
 }
 
+function buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory) {
+  const feedbackByRecommendationId = new Map();
+  for (const item of feedbackHistory ?? []) {
+    const key = item.recommendation_id ?? item.action_id;
+    if (!key) continue;
+    const current = feedbackByRecommendationId.get(key) ?? [];
+    current.push(item);
+    feedbackByRecommendationId.set(key, current);
+  }
+
+  const stateEntries = (stateHistory ?? []).map((item) => ({
+    event_type: 'state',
+    created_at: item.snapshot_time ?? null,
+    title: item.state_code,
+    subtitle: item.reason ?? null,
+    payload: item,
+  }));
+
+  const recommendationEntries = (recommendationsHistory ?? []).map((item) => {
+    const feedbackItems = feedbackByRecommendationId.get(item.id) ?? [];
+    return {
+      event_type: 'recommendation',
+      created_at: item.created_at ?? null,
+      title: item.action_code ?? 'recommendation',
+      subtitle: item.status ?? null,
+      payload: {
+        ...item,
+        feedback: feedbackItems,
+      },
+    };
+  });
+
+  const feedbackEntries = (feedbackHistory ?? []).map((item) => {
+    let status = 'shown';
+    if (item.executed) status = 'executed';
+    else if (item.accepted) status = 'accepted';
+    else if (item.rejected) status = 'rejected';
+
+    return {
+      event_type: 'feedback',
+      created_at: item.recorded_at ?? null,
+      title: `${item.action_code ?? 'recommendation'} · ${status}`,
+      subtitle: item.rejection_reason ?? item.deal_result ?? null,
+      payload: item,
+    };
+  });
+
+  return [...stateEntries, ...recommendationEntries, ...feedbackEntries]
+    .sort((left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime())
+    .slice(0, 30);
+}
+
 export async function buildManagerDashboard() {
   const opportunities = await repository.listOpportunities();
   return opportunities
@@ -448,9 +500,11 @@ export async function buildOpportunityCard(opportunityId) {
   const decision = await evaluateAndPersistDecision(opportunity);
   const stateHistory = await repository.listStateSnapshots(opportunityId);
   const recommendationsHistory = await repository.listRecommendations(opportunityId);
+  const feedbackHistory = await repository.listFeedbackForOpportunity(opportunityId);
   const graph = buildOpportunityGraph(opportunity);
   const similarCases = await getSimilarCases(opportunity, repository);
   const riskEvidence = collectSignalEvidence(opportunity);
+  const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
 
   return {
     opportunity_id: opportunity.id,
@@ -482,6 +536,8 @@ export async function buildOpportunityCard(opportunityId) {
     risk_evidence: riskEvidence,
     similar_cases: similarCases,
     recommendations_history: recommendationsHistory,
+    feedback_history: feedbackHistory,
+    decision_timeline: decisionTimeline,
     state_history: stateHistory,
     graph,
   };

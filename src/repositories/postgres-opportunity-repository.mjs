@@ -809,6 +809,37 @@ export class PostgresOpportunityRepository {
     return rows;
   }
 
+  async listFeedbackForOpportunity(opportunityId) {
+    const { rows } = await query(
+      `
+        SELECT
+          rf.recommendation_id AS action_id,
+          rf.recommendation_id,
+          o.external_opportunity_id AS opportunity_id,
+          r.action_code,
+          rf.shown,
+          rf.accepted,
+          rf.rejected,
+          rf.rejection_reason,
+          rf.executed,
+          rf.deal_result,
+          rf.effect_after_1_day,
+          rf.effect_after_3_days,
+          rf.effect_after_7_days,
+          rf.effect_after_30_days,
+          rf.created_at AS recorded_at
+        FROM recommendation_feedback rf
+        JOIN recommendations r ON r.id = rf.recommendation_id
+        JOIN opportunities o ON o.id = r.opportunity_id
+        WHERE o.external_opportunity_id = $1 OR o.id::text = $1
+        ORDER BY rf.created_at DESC
+      `,
+      [opportunityId],
+    );
+
+    return rows;
+  }
+
   async getFeedbackLearningSummary(limit = 10) {
     const feedbackResult = await query(
       `
