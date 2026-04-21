@@ -642,6 +642,16 @@ function renderDecisionTimeline(items) {
   `;
 }
 
+function getFeedbackFormValues() {
+  return {
+    deal_result: document.querySelector('#feedbackDealResult')?.value?.trim() || null,
+    effect_after_1_day: document.querySelector('#feedback1d')?.value?.trim() || null,
+    effect_after_3_days: document.querySelector('#feedback3d')?.value?.trim() || null,
+    effect_after_7_days: document.querySelector('#feedback7d')?.value?.trim() || null,
+    effect_after_30_days: document.querySelector('#feedback30d')?.value?.trim() || null,
+  };
+}
+
 function renderCard(card) {
   if (!card) {
     els.cardView.innerHTML = '<div class="empty">Сделка не найдена.</div>';
@@ -685,6 +695,18 @@ function renderCard(card) {
         </div>
         <div class="status-line">
           Recommendation ID: ${card.recommendation.recommendation_id ?? '—'}
+        </div>
+        <div class="history-list" style="margin-top: 12px;">
+          <div class="history-item">
+            <strong>Feedback Form</strong>
+            <div class="queue-search" style="margin-top: 10px;">
+              <input id="feedbackDealResult" type="text" placeholder="Итог по сделке / комментарий" />
+              <input id="feedback1d" type="text" placeholder="Effect after 1 day" />
+              <input id="feedback3d" type="text" placeholder="Effect after 3 days" />
+              <input id="feedback7d" type="text" placeholder="Effect after 7 days" />
+              <input id="feedback30d" type="text" placeholder="Effect after 30 days" />
+            </div>
+          </div>
         </div>
       </section>
       <section class="card-section full">
@@ -774,6 +796,7 @@ function renderCard(card) {
         executed: mode === 'executed',
         rejection_reason: mode === 'rejected' ? 'Отклонено из UI manager card' : null,
         result_after_days: mode === 'executed' ? 'Отмечено как выполненное из UI' : null,
+        ...getFeedbackFormValues(),
       };
 
       await api(`/actions/${encodeURIComponent(recommendationId)}/feedback`, {
