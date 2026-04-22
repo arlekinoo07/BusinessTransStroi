@@ -1,5 +1,7 @@
 import 'dotenv/config';
 
+import { createHash } from 'node:crypto';
+
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { pipeline, env as transformersEnv } from '@xenova/transformers';
 
@@ -107,7 +109,12 @@ function buildCompetitorMentionText(opportunity, event) {
 }
 
 function makePointId(prefix, value) {
-  return `${prefix}:${String(value)}`;
+  const hex = createHash('sha1')
+    .update(`${prefix}:${String(value)}`)
+    .digest('hex')
+    .slice(0, 32);
+
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 function makePayloadBase(opportunity) {
