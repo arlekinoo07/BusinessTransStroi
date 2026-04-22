@@ -863,6 +863,14 @@ function renderCard(card) {
       <section class="card-section full">
         <p class="panel-kicker">Similar Cases</p>
         <h3>Похожие кейсы</h3>
+        <div class="badge-row" style="margin-bottom: 10px;">
+          <span class="badge badge-low">total ${card.similar_cases_summary?.total ?? 0}</span>
+          <span class="badge ${card.similar_cases_summary?.vector_live ? 'badge-high' : 'badge-low'}">
+            ${card.similar_cases_summary?.vector_live ? 'vector live' : 'fallback mode'}
+          </span>
+          ${card.similar_cases_summary?.primary_source ? `<span class="badge badge-low">primary ${card.similar_cases_summary.primary_source}</span>` : ''}
+          ${(card.similar_cases_summary?.sources ?? []).map((source) => `<span class="badge badge-low">${source}</span>`).join('')}
+        </div>
         <div class="history-list">
           ${(card.similar_cases ?? []).map((item) => `
             <div class="history-item">

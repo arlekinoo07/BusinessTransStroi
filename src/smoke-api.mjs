@@ -89,6 +89,7 @@ async function main() {
       + (opportunityCard?.stop_signals?.strategy_warnings?.length ?? 0)
       + (opportunityCard?.stop_signals?.wait_conditions?.length ?? 0),
     card_similar_cases: opportunityCard?.similar_cases?.length ?? 0,
+    card_similar_cases_vector_live: opportunityCard?.similar_cases_summary?.vector_live ?? false,
     card_top_similar_case_source: opportunityCard?.similar_cases?.[0]?.source ?? null,
     card_top_similar_case_reasons: opportunityCard?.similar_cases?.[0]?.match_reasons ?? [],
     refreshed_recommendation_status: refreshedCard?.recommendation?.recommendation_status ?? null,

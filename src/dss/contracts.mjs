@@ -296,6 +296,18 @@ export const opportunityCardSchema = {
         },
       },
     },
+    similar_cases_summary: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        primary_source: { type: ['string', 'null'] },
+        sources: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        vector_live: { type: 'boolean' },
+      },
+    },
     feedback_history: {
       type: 'array',
       items: {

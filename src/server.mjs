@@ -752,6 +752,7 @@ export async function buildOpportunityCard(opportunityId) {
   const actionEffectiveness = await getActionEffectivenessMap();
   const stopSignals = buildStopSignals(opportunity, state, decision);
   const topSimilarCase = similarCases[0] ?? null;
+  const similarCaseSources = Array.from(new Set((similarCases ?? []).map((item) => item.source).filter(Boolean)));
 
   return {
     opportunity_id: opportunity.id,
@@ -788,6 +789,12 @@ export async function buildOpportunityCard(opportunityId) {
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,
     stop_signals: stopSignals,
+    similar_cases_summary: {
+      total: similarCases.length,
+      primary_source: topSimilarCase?.source ?? null,
+      sources: similarCaseSources,
+      vector_live: similarCaseSources.some((source) => source !== 'heuristic'),
+    },
     similar_cases: similarCases,
     recommendations_history: recommendationsHistory,
     feedback_history: feedbackHistory,
