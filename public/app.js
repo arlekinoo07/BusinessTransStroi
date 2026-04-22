@@ -112,6 +112,7 @@ function renderQueue(items) {
       <div class="queue-meta">
         <span class="pill">Следующее действие: ${item.next_action ?? '—'}</span>
         <span class="pill">Дедлайн: ${formatDateTime(item.deadline_at)}</span>
+        <span class="pill">Owner: ${item.recommended_owner ?? '—'}</span>
       </div>
       <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
       ${item.loss_risk_reason ? `<div class="muted">loss risk (${item.loss_risk_level ?? '—'}): ${item.loss_risk_reason}</div>` : ''}
@@ -121,6 +122,7 @@ function renderQueue(items) {
       <div class="badge-row">
         ${(item.priority_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
         ${item.loss_risk_level ? `<span class="badge badge-low">loss ${item.loss_risk_level}</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}

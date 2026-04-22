@@ -301,6 +301,10 @@ function buildQueueItem(opportunity, state, decision) {
     priority_bucket: toPriorityBucket(state.priority_score),
     next_action: decision.recommended_action?.action_name ?? null,
     next_action_code: decision.recommended_action?.action_code ?? null,
+    target_role: decision.recommended_action?.target_role ?? null,
+    recommended_owner: opportunity.owner_manager?.full_name
+      ?? opportunity.contact_person?.raw_value
+      ?? null,
     why_now: decision.explainability.why_important[0] ?? null,
     risk_summary: decision.explainability.risk_if_ignored ?? null,
     loss_risk_level: lossRisk.level,

@@ -136,6 +136,8 @@ export const managerQueueItemSchema = {
     priority_bucket: { type: 'string' },
     next_action: { type: ['string', 'null'] },
     next_action_code: { type: ['string', 'null'] },
+    target_role: { type: ['string', 'null'] },
+    recommended_owner: { type: ['string', 'null'] },
     why_now: { type: ['string', 'null'] },
     risk_summary: { type: ['string', 'null'] },
     loss_risk_level: { type: ['string', 'null'] },
