@@ -150,10 +150,10 @@ async function upsertPoints(collectionName, points) {
     return;
   }
 
-  const batchSize = 50;
+  const batchSize = 10;
   for (let offset = 0; offset < points.length; offset += batchSize) {
     await client.upsert(collectionName, {
-      wait: true,
+      wait: false,
       points: points.slice(offset, offset + batchSize),
     });
   }
@@ -363,4 +363,3 @@ export async function getQdrantStatus() {
     })),
   };
 }
-
