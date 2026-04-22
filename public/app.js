@@ -867,8 +867,9 @@ function renderCard(card) {
           ${(card.similar_cases ?? []).map((item) => `
             <div class="history-item">
               <strong>${item.title ?? 'Без названия'}</strong>
-              <div class="muted">outcome: ${item.outcome ?? '—'} · source: ${item.source ?? 'unknown'}</div>
+              <div class="muted">outcome: ${item.outcome ?? '—'} · source: ${item.source ?? 'unknown'} · score: ${item.score ?? '—'}</div>
               <div>${item.hint ?? '—'}</div>
+              ${(item.match_reasons ?? []).length ? `<div class="badge-row">${item.match_reasons.map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}</div>` : ''}
             </div>
           `).join('') || '<div class="empty">Похожие кейсы пока не найдены.</div>'}
         </div>

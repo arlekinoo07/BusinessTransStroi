@@ -751,6 +751,7 @@ export async function buildOpportunityCard(opportunityId) {
   const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
   const actionEffectiveness = await getActionEffectivenessMap();
   const stopSignals = buildStopSignals(opportunity, state, decision);
+  const topSimilarCase = similarCases[0] ?? null;
 
   return {
     opportunity_id: opportunity.id,
@@ -776,7 +777,12 @@ export async function buildOpportunityCard(opportunityId) {
       target_role: decision.recommended_action?.target_role ?? null,
       deadline_at: decision.deadline_at,
       escalation_action_code: decision.escalation_action?.action_code ?? null,
-      explainability: decision.explainability,
+      explainability: {
+        ...decision.explainability,
+        similar_case_hint: topSimilarCase
+          ? `${topSimilarCase.title} · ${topSimilarCase.outcome} · ${topSimilarCase.source}`
+          : decision.explainability.similar_case_hint,
+      },
       action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),

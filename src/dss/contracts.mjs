@@ -287,6 +287,12 @@ export const opportunityCardSchema = {
           title: { type: 'string' },
           outcome: { type: 'string' },
           hint: { type: 'string' },
+          source: { type: ['string', 'null'] },
+          score: { type: ['number', 'null'] },
+          match_reasons: {
+            type: 'array',
+            items: { type: 'string' },
+          },
         },
       },
     },
