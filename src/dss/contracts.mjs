@@ -175,6 +175,10 @@ export const managerQueueItemSchema = {
       type: 'array',
       items: { type: 'string' },
     },
+    priority_reasons: {
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
 };
 

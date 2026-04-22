@@ -277,6 +277,20 @@ function buildQueueItem(opportunity, state, decision) {
   const lowPriorityReasons = collectLowPriorityReasons(opportunity, state);
   const lossRisk = buildLossRiskSummary(opportunity, state);
   const alternativeAction = buildAlternativeAction(opportunity, state, decision);
+  const priorityReasons = [];
+
+  if ((state.scores.need ?? 0) >= 4) {
+    priorityReasons.push('need strong');
+  }
+  if ((state.scores.time ?? 0) >= 4) {
+    priorityReasons.push('time critical');
+  }
+  if ((state.scores.money ?? 0) >= 4) {
+    priorityReasons.push('money ready');
+  }
+  if ((state.scores.fit ?? 0) >= 4) {
+    priorityReasons.push('fit high');
+  }
 
   return {
     opportunity_id: opportunity.id,
@@ -295,6 +309,7 @@ function buildQueueItem(opportunity, state, decision) {
     deadline_at: decision.deadline_at,
     state_codes: state.states.map((item) => item.state_code),
     score_vector: state.scores,
+    priority_reasons: priorityReasons,
     why_blocked: blockingReasons,
     why_low_priority: lowPriorityReasons,
   };
