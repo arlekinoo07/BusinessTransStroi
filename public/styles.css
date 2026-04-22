@@ -226,6 +226,11 @@ input,
   gap: 12px;
 }
 
+.queue-item-alert {
+  border-color: rgba(182, 73, 38, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(182, 73, 38, 0.08);
+}
+
 .queue-item.escalation {
   background:
     linear-gradient(180deg, rgba(255, 247, 239, 0.92), rgba(255, 252, 245, 0.96)),
@@ -266,6 +271,11 @@ input,
   border-radius: 999px;
   padding: 7px 12px;
   font-size: 13px;
+}
+
+.pill-alert {
+  background: rgba(182, 73, 38, 0.08);
+  color: var(--critical);
 }
 
 .badge-critical { background: rgba(182, 73, 38, 0.12); color: var(--critical); }

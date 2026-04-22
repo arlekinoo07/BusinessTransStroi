@@ -55,6 +55,8 @@ async function main() {
     top_manager_priority_reasons: managerDashboard[0]?.priority_reasons ?? [],
     top_manager_target_role: managerDashboard[0]?.target_role ?? null,
     top_manager_owner: managerDashboard[0]?.recommended_owner ?? null,
+    top_manager_promise_overdue: managerDashboard[0]?.promise_overdue ?? false,
+    top_manager_sla_breached: managerDashboard[0]?.sla_breached ?? false,
     top_manager_loss_risk: managerDashboard[0]?.loss_risk_level ?? null,
     top_manager_alternative: managerDashboard[0]?.alternative_action ?? null,
     target_opportunity_id: targetOpportunityId,

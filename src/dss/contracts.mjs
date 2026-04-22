@@ -143,6 +143,9 @@ export const managerQueueItemSchema = {
     loss_risk_level: { type: ['string', 'null'] },
     loss_risk_reason: { type: ['string', 'null'] },
     alternative_action: { type: ['string', 'null'] },
+    next_step_due_at: { type: ['string', 'null'], format: 'date-time' },
+    promise_overdue: { type: 'boolean' },
+    sla_breached: { type: 'boolean' },
     deadline_at: { type: ['string', 'null'], format: 'date-time' },
     state_codes: {
       type: 'array',

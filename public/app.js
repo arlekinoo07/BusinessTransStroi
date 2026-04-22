@@ -101,7 +101,7 @@ function renderQueue(items) {
   }
 
   els.queueList.innerHTML = items.map((item) => `
-    <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
+    <article class="queue-item ${item.promise_overdue || item.sla_breached ? 'queue-item-alert' : ''}" data-opportunity-id="${item.opportunity_id}">
       <div class="queue-top">
         <div>
           <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
@@ -113,6 +113,7 @@ function renderQueue(items) {
         <span class="pill">Следующее действие: ${item.next_action ?? '—'}</span>
         <span class="pill">Дедлайн: ${formatDateTime(item.deadline_at)}</span>
         <span class="pill">Owner: ${item.recommended_owner ?? '—'}</span>
+        ${item.next_step_due_at ? `<span class="pill ${item.promise_overdue ? 'pill-alert' : ''}">Next step due: ${formatDateTime(item.next_step_due_at)}</span>` : ''}
       </div>
       <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
       ${item.loss_risk_reason ? `<div class="muted">loss risk (${item.loss_risk_level ?? '—'}): ${item.loss_risk_reason}</div>` : ''}
@@ -123,6 +124,8 @@ function renderQueue(items) {
         ${(item.priority_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
         ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
+        ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
+        ${item.sla_breached ? `<span class="badge badge-critical">sla breach</span>` : ''}
         ${item.loss_risk_level ? `<span class="badge badge-low">loss ${item.loss_risk_level}</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}

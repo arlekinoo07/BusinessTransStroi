@@ -278,6 +278,9 @@ function buildQueueItem(opportunity, state, decision) {
   const lossRisk = buildLossRiskSummary(opportunity, state);
   const alternativeAction = buildAlternativeAction(opportunity, state, decision);
   const priorityReasons = [];
+  const nextStepDueAt = opportunity.next_step?.due_at ?? null;
+  const promiseOverdue = state.states.some((item) => item.state_code === 'manager_promise_overdue');
+  const slaBreached = state.states.some((item) => item.state_code === 'hot_unworked');
 
   if ((state.scores.need ?? 0) >= 4) {
     priorityReasons.push('need strong');
@@ -310,6 +313,9 @@ function buildQueueItem(opportunity, state, decision) {
     loss_risk_level: lossRisk.level,
     loss_risk_reason: lossRisk.reason,
     alternative_action: alternativeAction,
+    next_step_due_at: nextStepDueAt,
+    promise_overdue: promiseOverdue,
+    sla_breached: slaBreached,
     deadline_at: decision.deadline_at,
     state_codes: state.states.map((item) => item.state_code),
     score_vector: state.scores,
