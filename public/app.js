@@ -647,6 +647,43 @@ function renderDecisionTimeline(items) {
   `;
 }
 
+function renderStopSignals(stopSignals) {
+  if (!stopSignals) {
+    return '<div class="empty">Стоп-сигналы пока не рассчитаны.</div>';
+  }
+
+  const renderList = (items, emptyLabel) => (
+    items?.length
+      ? `<div class="history-list">${items.map((item) => `<div class="history-item">${item}</div>`).join('')}</div>`
+      : `<div class="empty">${emptyLabel}</div>`
+  );
+
+  return `
+    <div class="card-grid compact-grid">
+      <section class="card-section">
+        <p class="panel-kicker">Why Not Now</p>
+        <h3>Блокирующие причины</h3>
+        ${renderList(stopSignals.blocked_reasons, 'Явных блокеров сейчас нет.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Why Not Now</p>
+        <h3>Почему приоритет ниже</h3>
+        ${renderList(stopSignals.low_priority_reasons, 'Сделка не выглядит искусственно заниженной.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Stop Signals</p>
+        <h3>Стратегические предупреждения</h3>
+        ${renderList(stopSignals.strategy_warnings, 'Стратегических стоп-сигналов пока нет.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Before Attack</p>
+        <h3>Что нужно сделать до дожима</h3>
+        ${renderList(stopSignals.wait_conditions, 'Сделку можно атаковать без дополнительных стоп-условий.')}
+      </section>
+    </div>
+  `;
+}
+
 function renderFeedbackHistory(items) {
   if (!items?.length) {
     return '<div class="empty">Feedback по рекомендации пока нет.</div>';
@@ -759,6 +796,11 @@ function renderCard(card) {
         <p class="panel-kicker">Risk / Evidence</p>
         <h3>Сигналы и подтверждения</h3>
         ${renderRiskEvidence(card.risk_evidence)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Why Not Now / Stop Signals</p>
+        <h3>Почему не всегда нужно атаковать прямо сейчас</h3>
+        ${renderStopSignals(card.stop_signals)}
       </section>
       <section class="card-section">
         <p class="panel-kicker">Score Vector</p>

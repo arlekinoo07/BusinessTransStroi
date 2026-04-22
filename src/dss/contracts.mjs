@@ -249,6 +249,27 @@ export const opportunityCardSchema = {
         evidence: { type: 'object' },
       },
     },
+    stop_signals: {
+      type: 'object',
+      properties: {
+        blocked_reasons: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        low_priority_reasons: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        strategy_warnings: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        wait_conditions: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
     similar_cases: {
       type: 'array',
       items: {

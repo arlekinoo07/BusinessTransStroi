@@ -199,11 +199,8 @@ function buildAlternativeAction(opportunity, state, decision) {
   return null;
 }
 
-function buildQueueItem(opportunity, state, decision) {
+function collectBlockingReasons(opportunity, state) {
   const blockingReasons = [];
-  const lowPriorityReasons = [];
-  const lossRisk = buildLossRiskSummary(opportunity, state);
-  const alternativeAction = buildAlternativeAction(opportunity, state, decision);
 
   if (state.states.some((item) => item.state_code === 'spec_missing')) {
     blockingReasons.push('Нужны уточнения по техпараметрам.');
@@ -214,7 +211,15 @@ function buildQueueItem(opportunity, state, decision) {
   if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
     blockingReasons.push('Сделка зависит от субаренды.');
   }
-  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 15 && opportunity.economic_assessment?.expected_margin_percent !== null) {
+
+  return blockingReasons;
+}
+
+function collectLowPriorityReasons(opportunity, state) {
+  const lowPriorityReasons = [];
+
+  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 15
+    && opportunity.economic_assessment?.expected_margin_percent !== null) {
     lowPriorityReasons.push('Маржа ниже рабочего порога.');
   }
   if (state.states.some((item) => item.state_code === 'noise_low_priority')) {
@@ -223,6 +228,55 @@ function buildQueueItem(opportunity, state, decision) {
   if (!opportunity.next_step?.code && !opportunity.next_step?.description) {
     lowPriorityReasons.push('Не зафиксирован следующий шаг.');
   }
+
+  return lowPriorityReasons;
+}
+
+function buildStopSignals(opportunity, state, decision) {
+  const blockingReasons = collectBlockingReasons(opportunity, state);
+  const lowPriorityReasons = collectLowPriorityReasons(opportunity, state);
+  const strategyWarnings = [];
+  const waitConditions = [];
+
+  if ((opportunity.economic_assessment?.expected_margin_percent ?? 0) < 10
+    && opportunity.economic_assessment?.expected_margin_percent !== null) {
+    strategyWarnings.push('Экономика сделки близка к убыточной для текущей модели.');
+  }
+  if (opportunity.financial_risk?.client_blacklisted) {
+    strategyWarnings.push('Клиент находится в стоп-контуре по политике компании.');
+  }
+  if (opportunity.financial_risk?.credit_limit_blocked) {
+    strategyWarnings.push('Кредитный лимит клиента заблокирован.');
+  }
+  if (state.states.some((item) => item.state_code === 'spec_missing')) {
+    waitConditions.push('Сначала дособрать технические параметры и условия заезда.');
+  }
+  if (state.states.some((item) => item.state_code === 'debt_risk')) {
+    waitConditions.push('Сначала согласовать условия оплаты и снять финансовые ограничения.');
+  }
+  if (state.states.some((item) => item.state_code === 'noise_low_priority')) {
+    waitConditions.push('Сначала подтвердить, что потребность реальная, а не шумовая.');
+  }
+  if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
+    waitConditions.push('Сначала понять, доступна ли субаренда и укладывается ли она в маржу.');
+  }
+  if (!waitConditions.length && decision.recommended_action?.action_code === 'stop_deal') {
+    waitConditions.push('Сейчас лучше не тратить ресурс команды, пока не появится предметность.');
+  }
+
+  return {
+    blocked_reasons: blockingReasons,
+    low_priority_reasons: lowPriorityReasons,
+    strategy_warnings: strategyWarnings,
+    wait_conditions: waitConditions,
+  };
+}
+
+function buildQueueItem(opportunity, state, decision) {
+  const blockingReasons = collectBlockingReasons(opportunity, state);
+  const lowPriorityReasons = collectLowPriorityReasons(opportunity, state);
+  const lossRisk = buildLossRiskSummary(opportunity, state);
+  const alternativeAction = buildAlternativeAction(opportunity, state, decision);
 
   return {
     opportunity_id: opportunity.id,
@@ -649,6 +703,7 @@ export async function buildOpportunityCard(opportunityId) {
   const riskEvidence = collectSignalEvidence(opportunity);
   const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
   const actionEffectiveness = await getActionEffectivenessMap();
+  const stopSignals = buildStopSignals(opportunity, state, decision);
 
   return {
     opportunity_id: opportunity.id,
@@ -679,6 +734,7 @@ export async function buildOpportunityCard(opportunityId) {
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,
+    stop_signals: stopSignals,
     similar_cases: similarCases,
     recommendations_history: recommendationsHistory,
     feedback_history: feedbackHistory,

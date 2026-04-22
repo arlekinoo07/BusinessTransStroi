@@ -65,6 +65,11 @@ async function main() {
     card_graph_nodes: opportunityCard?.graph?.nodes?.length ?? 0,
     card_communication_history: opportunityCard?.communication_history?.length ?? 0,
     card_risk_evidence_flags: Object.values(opportunityCard?.risk_evidence?.flags ?? {}).filter(Boolean).length,
+    card_stop_signal_count:
+      (opportunityCard?.stop_signals?.blocked_reasons?.length ?? 0)
+      + (opportunityCard?.stop_signals?.low_priority_reasons?.length ?? 0)
+      + (opportunityCard?.stop_signals?.strategy_warnings?.length ?? 0)
+      + (opportunityCard?.stop_signals?.wait_conditions?.length ?? 0),
     card_similar_cases: opportunityCard?.similar_cases?.length ?? 0,
     refreshed_recommendation_status: refreshedCard?.recommendation?.recommendation_status ?? null,
     contract_names: Object.keys(getContractsOverview()),
