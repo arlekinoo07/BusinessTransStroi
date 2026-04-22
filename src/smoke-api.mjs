@@ -51,6 +51,7 @@ async function main() {
   console.log(JSON.stringify({
     manager_items: managerDashboard.length,
     rop_items: ropDashboard.length,
+    top_rop_item: ropDashboard[0] ?? null,
     top_manager_item: managerDashboard[0],
     top_manager_priority_reasons: managerDashboard[0]?.priority_reasons ?? [],
     top_manager_target_role: managerDashboard[0]?.target_role ?? null,
@@ -66,6 +67,10 @@ async function main() {
     manager_blocked_items: managerBlocked.length,
     manager_low_priority_items: managerLowPriority.length,
     rop_escalation_items: ropEscalations.length,
+    top_rop_owner: ropDashboard[0]?.recommended_owner ?? null,
+    top_rop_target_role: ropDashboard[0]?.target_role ?? null,
+    top_rop_promise_overdue: ropDashboard[0]?.promise_overdue ?? false,
+    top_rop_sla_breached: ropDashboard[0]?.sla_breached ?? false,
     logistics_items: logisticsDashboard.length,
     owner_items: ownerDashboard.items?.length ?? 0,
     owner_summary: ownerDashboard.summary ?? null,

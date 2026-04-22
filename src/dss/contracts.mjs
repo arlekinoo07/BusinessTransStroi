@@ -360,8 +360,13 @@ export const ropEscalationItemSchema = {
     escalation_reason: { type: ['string', 'null'] },
     escalation_type: { type: 'string' },
     recommended_action: { type: ['string', 'null'] },
+    target_role: { type: ['string', 'null'] },
+    recommended_owner: { type: ['string', 'null'] },
     recommendation_status: { type: ['string', 'null'] },
     deadline_at: { type: ['string', 'null'], format: 'date-time' },
+    next_step_due_at: { type: ['string', 'null'], format: 'date-time' },
+    promise_overdue: { type: 'boolean' },
+    sla_breached: { type: 'boolean' },
     evidence_summary: {
       type: 'object',
       properties: {

@@ -151,7 +151,7 @@ function renderRopEscalations(items) {
   }
 
   els.ropList.innerHTML = items.map((item) => `
-    <article class="queue-item escalation" data-opportunity-id="${item.opportunity_id}">
+    <article class="queue-item escalation ${item.promise_overdue || item.sla_breached ? 'queue-item-alert' : ''}" data-opportunity-id="${item.opportunity_id}">
       <div class="queue-top">
         <div>
           <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
@@ -162,6 +162,8 @@ function renderRopEscalations(items) {
       <div class="queue-meta">
         <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
         <span class="pill">Deadline: ${formatDateTime(item.deadline_at)}</span>
+        <span class="pill">Owner: ${item.recommended_owner ?? '—'}</span>
+        ${item.next_step_due_at ? `<span class="pill ${item.promise_overdue ? 'pill-alert' : ''}">Next step due: ${formatDateTime(item.next_step_due_at)}</span>` : ''}
       </div>
       <div class="muted">${item.escalation_reason ?? 'Причина не указана'}</div>
       <div class="muted">
@@ -173,6 +175,9 @@ function renderRopEscalations(items) {
       </div>
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
+        ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
+        ${item.sla_breached ? `<span class="badge badge-critical">sla breach</span>` : ''}
         ${(item.evidence_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
         ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
         ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}

@@ -518,8 +518,15 @@ export async function buildRopDashboard() {
         escalation_reason: escalationReason,
         escalation_type: escalationType,
         recommended_action: decision.recommended_action?.action_name ?? null,
+        target_role: decision.recommended_action?.target_role ?? null,
+        recommended_owner: opportunity.owner_manager?.full_name
+          ?? opportunity.contact_person?.raw_value
+          ?? null,
         recommendation_status: decision.escalation_action?.action_code ? 'needs_approval' : 'monitor',
         deadline_at: decision.deadline_at,
+        next_step_due_at: opportunity.next_step?.due_at ?? null,
+        promise_overdue: state.states.some((item) => item.state_code === 'manager_promise_overdue'),
+        sla_breached: state.states.some((item) => item.state_code === 'hot_unworked'),
         action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
         evidence_summary: {
           competitor_mentions: riskEvidence.counters.competitor_mentions,
