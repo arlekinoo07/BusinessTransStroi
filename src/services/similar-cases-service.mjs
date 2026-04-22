@@ -72,32 +72,48 @@ async function qdrantSimilarCases(opportunity) {
     ...(opportunity.communication_events ?? []).slice(0, 3).map((item) => item.summary ?? item.text),
   ].filter(Boolean).join('\n');
 
-  const targetCollection = opportunity.commercial_stage === 'lost'
-    ? collections.lost_deals
-    : collections.won_deals;
+  const must = [
+    {
+      key: 'equipment_type',
+      match: { value: opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? '' },
+    },
+  ].filter((item) => item.match.value);
 
-  const response = await searchQdrantCollection(targetCollection, {
-    text: searchText,
-    limit: 3,
-    must: [
-      {
-        key: 'equipment_type',
-        match: { value: opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? '' },
-      },
-    ].filter((item) => item.match.value),
-  });
+  const collectionPriority = opportunity.commercial_stage === 'lost'
+    ? [collections.lost_deals, collections.object_history, collections.deal_events]
+    : [collections.won_deals, collections.object_history, collections.deal_events];
 
-  return response.map((item) => ({
-    title: item.payload?.title ?? `Deal ${item.payload?.bitrix_id ?? item.id}`,
-    outcome: item.payload?.commercial_stage ?? 'deal',
-    hint: item.payload?.text?.slice(0, 180) ?? 'Semantic match from Qdrant.',
-    score: Number(item.score?.toFixed?.(3) ?? item.score ?? 0),
-    source: item.payload?.entity_type ?? 'qdrant',
-    match_reasons: [
-      item.payload?.equipment_type ? 'same_equipment' : null,
-      item.payload?.object ? 'same_object' : null,
-    ].filter(Boolean),
-  }));
+  const results = [];
+  for (const collectionName of collectionPriority) {
+    const response = await searchQdrantCollection(collectionName, {
+      text: searchText,
+      limit: 3,
+      must,
+    });
+
+    for (const item of response) {
+      results.push({
+        title: item.payload?.title ?? `Deal ${item.payload?.bitrix_id ?? item.id}`,
+        outcome: item.payload?.commercial_stage ?? item.payload?.entity_type ?? 'deal',
+        hint: item.payload?.text?.slice(0, 180) ?? 'Semantic match from Qdrant.',
+        score: Number(item.score?.toFixed?.(3) ?? item.score ?? 0),
+        source: item.payload?.entity_type ?? collectionName,
+        match_reasons: [
+          item.payload?.equipment_type ? 'same_equipment' : null,
+          item.payload?.object ? 'same_object' : null,
+          item.payload?.decision_access_status ? 'same_access' : null,
+        ].filter(Boolean),
+      });
+    }
+
+    if (results.length >= 3) {
+      break;
+    }
+  }
+
+  return Array.from(
+    new Map(results.map((item) => [`${item.title}:${item.source}`, item])).values(),
+  ).slice(0, 3);
 }
 
 export async function getSimilarCases(opportunity, repository) {
