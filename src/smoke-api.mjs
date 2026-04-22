@@ -19,7 +19,10 @@ const repository = createRepository();
 
 async function main() {
   const managerDashboard = await buildManagerDashboard();
-  const managerQueue = await buildManagerQueue(5);
+  const managerQueue = await buildManagerQueue({ limit: 5 });
+  const managerAttackNow = await buildManagerQueue({ limit: 5, mode: 'attack_now' });
+  const managerBlocked = await buildManagerQueue({ limit: 5, mode: 'blocked' });
+  const managerLowPriority = await buildManagerQueue({ limit: 5, mode: 'low_priority' });
   const ropDashboard = await buildRopDashboard();
   const ropEscalations = await buildRopEscalations({ limit: 10 });
   const logisticsDashboard = await buildLogisticsDashboard({ limit: 10 });
@@ -52,6 +55,9 @@ async function main() {
     top_manager_alternative: managerDashboard[0]?.alternative_action ?? null,
     target_opportunity_id: targetOpportunityId,
     manager_queue_items: managerQueue.length,
+    manager_attack_now_items: managerAttackNow.length,
+    manager_blocked_items: managerBlocked.length,
+    manager_low_priority_items: managerLowPriority.length,
     rop_escalation_items: ropEscalations.length,
     logistics_items: logisticsDashboard.length,
     owner_items: ownerDashboard.items?.length ?? 0,

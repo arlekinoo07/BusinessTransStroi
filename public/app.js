@@ -6,6 +6,7 @@ const els = {
   queueLimit: document.querySelector('#queueLimit'),
   queueBucket: document.querySelector('#queueBucket'),
   queueState: document.querySelector('#queueState'),
+  queueMode: document.querySelector('#queueMode'),
   queueSearch: document.querySelector('#queueSearch'),
   ropType: document.querySelector('#ropType'),
   logisticsMode: document.querySelector('#logisticsMode'),
@@ -911,6 +912,7 @@ async function loadQueue() {
 
   if (els.queueBucket.value) params.set('bucket', els.queueBucket.value);
   if (els.queueState.value) params.set('state', els.queueState.value);
+  if (els.queueMode.value) params.set('mode', els.queueMode.value);
   if (els.queueSearch.value.trim()) params.set('search', els.queueSearch.value.trim());
 
   const data = await api(`/dashboard/manager/queue?${params.toString()}`);
@@ -1040,6 +1042,7 @@ els.loadCardButton.addEventListener('click', () => loadCard());
 els.queueLimit.addEventListener('change', refreshAll);
 els.queueBucket.addEventListener('change', refreshAll);
 els.queueState.addEventListener('change', refreshAll);
+els.queueMode.addEventListener('change', refreshAll);
 els.ropType.addEventListener('change', refreshAll);
 els.logisticsMode.addEventListener('change', refreshAll);
 els.ownerStrategy.addEventListener('change', refreshAll);

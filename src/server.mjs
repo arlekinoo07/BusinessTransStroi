@@ -672,12 +672,23 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
   };
 }
 
-export async function buildManagerQueue({ limit = 20, bucket = '', state = '', search = '' } = {}) {
+export async function buildManagerQueue({ limit = 20, bucket = '', state = '', mode = '', search = '' } = {}) {
   const normalizedSearch = search.trim().toLowerCase();
   const items = await buildManagerDashboard();
   return items
     .filter((item) => !bucket || item.priority_bucket === bucket)
     .filter((item) => !state || item.state_codes.includes(state))
+    .filter((item) => {
+      if (!mode) return true;
+      if (mode === 'blocked') return (item.why_blocked?.length ?? 0) > 0;
+      if (mode === 'low_priority') return (item.why_low_priority?.length ?? 0) > 0;
+      if (mode === 'attack_now') {
+        return (item.why_blocked?.length ?? 0) === 0
+          && (item.why_low_priority?.length ?? 0) === 0
+          && ['critical', 'high'].includes(item.priority_bucket);
+      }
+      return true;
+    })
     .filter((item) => {
       if (!normalizedSearch) return true;
       return [item.company, item.object, item.next_action, item.why_now]
@@ -1202,6 +1213,7 @@ export function createAppServer() {
             limit: Number(url.searchParams.get('limit') ?? 20),
             bucket: url.searchParams.get('bucket') ?? '',
             state: url.searchParams.get('state') ?? '',
+            mode: url.searchParams.get('mode') ?? '',
             search: url.searchParams.get('search') ?? '',
           }),
         });
