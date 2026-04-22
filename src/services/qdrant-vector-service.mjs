@@ -28,8 +28,6 @@ const COLLECTIONS = {
 };
 
 let extractorPromise;
-let clientInstance;
-
 export function hasQdrantConfig() {
   return Boolean(QDRANT_URL);
 }
@@ -43,14 +41,10 @@ function getQdrantClient() {
     return null;
   }
 
-  if (!clientInstance) {
-    clientInstance = new QdrantClient({
-      url: QDRANT_URL,
-      apiKey: QDRANT_API_KEY || undefined,
-    });
-  }
-
-  return clientInstance;
+  return new QdrantClient({
+    url: QDRANT_URL,
+    apiKey: QDRANT_API_KEY || undefined,
+  });
 }
 
 async function getExtractor() {
