@@ -122,6 +122,7 @@ function renderQueue(items) {
       ${item.why_low_priority?.length ? `<div class="muted">low priority: ${item.why_low_priority.join(' · ')}</div>` : ''}
       <div class="badge-row">
         ${(item.priority_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
         ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
         ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
@@ -776,6 +777,9 @@ function renderCard(card) {
             'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
           })}
         </dl>
+        <div class="badge-row">
+          ${(card.recommendation_signals?.markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('') || '<span class="badge badge-low">no advanced signals</span>'}
+        </div>
         <div class="action-row">
           <button class="button button-success" data-feedback="accepted">Принять</button>
           <button class="button button-danger" data-feedback="rejected">Отклонить</button>

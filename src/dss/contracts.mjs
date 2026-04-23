@@ -184,6 +184,10 @@ export const managerQueueItemSchema = {
       type: 'array',
       items: { type: 'string' },
     },
+    signal_markers: {
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
 };
 
@@ -230,6 +234,18 @@ export const opportunityCardSchema = {
         escalation_action_code: { type: ['string', 'null'] },
         explainability: { type: 'object' },
         action_effectiveness: managerQueueItemSchema.properties.action_effectiveness,
+      },
+    },
+    recommendation_signals: {
+      type: 'object',
+      properties: {
+        contract_ready: { type: 'boolean' },
+        decision_access: { type: 'boolean' },
+        spec_strong: { type: 'boolean' },
+        markers: {
+          type: 'array',
+          items: { type: 'string' },
+        },
       },
     },
     risk_evidence: {

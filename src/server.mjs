@@ -295,6 +295,17 @@ function buildQueueItem(opportunity, state, decision) {
     priorityReasons.push('fit high');
   }
 
+  const signalMarkers = [];
+  if (state.states.some((item) => item.state_code === 'client_ready_for_contract')) {
+    signalMarkers.push('contract ready');
+  }
+  if (state.states.some((item) => item.state_code === 'decision_maker_reached')) {
+    signalMarkers.push('decision access');
+  }
+  if (state.states.some((item) => item.state_code === 'spec_strong')) {
+    signalMarkers.push('spec strong');
+  }
+
   return {
     opportunity_id: opportunity.id,
     bitrix_deal_id: opportunity.bitrix_deal_id,
@@ -320,6 +331,7 @@ function buildQueueItem(opportunity, state, decision) {
     state_codes: state.states.map((item) => item.state_code),
     score_vector: state.scores,
     priority_reasons: priorityReasons,
+    signal_markers: signalMarkers,
     why_blocked: blockingReasons,
     why_low_priority: lowPriorityReasons,
   };
@@ -785,6 +797,16 @@ export async function buildOpportunityCard(opportunityId) {
           : decision.explainability.similar_case_hint,
       },
       action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
+    },
+    recommendation_signals: {
+      contract_ready: state.states.some((item) => item.state_code === 'client_ready_for_contract'),
+      decision_access: state.states.some((item) => item.state_code === 'decision_maker_reached'),
+      spec_strong: state.states.some((item) => item.state_code === 'spec_strong'),
+      markers: [
+        ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
+        ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
+        ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+      ],
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,
