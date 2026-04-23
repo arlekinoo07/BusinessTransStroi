@@ -9,6 +9,7 @@ function scoreNeed(opportunity) {
   if (opportunity.time_window?.start_at) score += 1;
   if ((opportunity.communication_events ?? []).length >= 2) score += 1;
   if (opportunity.commercial_scenario) score += 1;
+  if (opportunity.commercial_stage === 'offer_requested' || opportunity.commercial_stage === 'contract_requested') score += 0.5;
   return clampScore(score);
 }
 
@@ -32,6 +33,7 @@ function scoreSpec(opportunity) {
   let score = 0;
   if (opportunity.equipment_type?.normalized_value) score += 2;
   if (opportunity.technical_requirements?.length) score += 1.5;
+  if ((opportunity.technical_requirements?.length ?? 0) >= 2) score += 0.5;
   if (opportunity.time_window?.duration_days) score += 0.75;
   if (opportunity.project_object?.normalized_value) score += 0.75;
   return clampScore(score);
@@ -40,6 +42,7 @@ function scoreSpec(opportunity) {
 function scoreAccess(opportunity) {
   let score = 1;
   if (opportunity.decision_access_status === 'decision_maker') score += 2.5;
+  if (opportunity.decision_access_status === 'influencer') score += 1;
   if (opportunity.contact_person?.role?.toLowerCase().includes('лпр')) score += 1.5;
   if (opportunity.contact_person?.influence_score >= 0.7) score += 1;
   return clampScore(score);
@@ -49,6 +52,8 @@ function scoreMoney(opportunity) {
   let score = 0.5;
   if (opportunity.commercial_stage === 'offer_requested') score += 1.5;
   if (opportunity.commercial_stage === 'contract_requested') score += 2.5;
+  if (opportunity.commercial_stage === 'invoice_requested') score += 2;
+  if (opportunity.payment_readiness === 'commercial') score += 0.5;
   if (opportunity.payment_readiness === 'ready') score += 1;
   if (opportunity.financial_risk?.debt_overdue_days > 0) score -= 2;
   return clampScore(score);
@@ -131,6 +136,18 @@ export function evaluateOpportunityState(opportunity) {
 
   if (scores.need >= 4 && scores.time >= 4 && scores.money >= 3) {
     addState(states, 'hot_urgent', 'Потребность конкретная, окно мобилизации близко, клиент дошел до коммерческой стадии.', 0.88);
+  }
+
+  if (scores.money >= 4 && opportunity.commercial_stage === 'contract_requested') {
+    addState(states, 'client_ready_for_contract', 'Клиент дошел до договорного шага и не требует длинного прогрева.', 0.87);
+  }
+
+  if (scores.access >= 4 && opportunity.decision_access_status === 'decision_maker') {
+    addState(states, 'decision_maker_reached', 'Контакт близок к принимающему решение, окно влияния сильное.', 0.82);
+  }
+
+  if (scores.spec >= 4) {
+    addState(states, 'spec_strong', 'Техника и условия достаточно конкретизированы для уверенного предложения.', 0.78);
   }
 
   if (scores.fit >= 4 && ownEquipmentAvailable) {

@@ -14,6 +14,12 @@ const STATE_TO_ACTION = [
     why: 'Клиент созрел до быстрой коммерческой реакции.',
   },
   {
+    state: 'client_ready_for_contract',
+    action: 'send_contract',
+    escalation: null,
+    why: 'Сделка дошла до договорной зрелости, нужно быстро перевести ее в оформление.',
+  },
+  {
     state: 'hot_own_equipment',
     action: 'reserve_own_equipment',
     escalation: 'reprice_deal',
@@ -30,6 +36,12 @@ const STATE_TO_ACTION = [
     action: 'clarify_specs',
     escalation: null,
     why: 'Без уточнений система не рекомендует агрессивный дожим.',
+  },
+  {
+    state: 'decision_maker_reached',
+    action: 'sales_call',
+    escalation: null,
+    why: 'Есть доступ к принимающему решение, стоит использовать окно прямого контакта.',
   },
   {
     state: 'debt_risk',
