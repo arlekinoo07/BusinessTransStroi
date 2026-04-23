@@ -1137,7 +1137,7 @@ export function createAppServer() {
       const auth = resolveAuthContext(request);
 
       if (request.method === 'GET' && url.pathname === '/health') {
-        return sendJson(response, 200, { status: 'ok', service: 'ai-sales-decision-engine' });
+        return sendJson(response, 200, { status: 'ok', service: 'zoloto-desk' });
       }
 
       if (request.method === 'GET' && url.pathname === '/auth/me') {
@@ -1417,7 +1417,7 @@ export function createAppServer() {
 export function startServer() {
   const server = createAppServer();
   server.listen(PORT, HOST, () => {
-    console.log(`AI Sales Decision Engine API listening on http://${HOST}:${PORT}`);
+    console.log(`Zoloto Desk API listening on http://${HOST}:${PORT}`);
   });
 
   return server;
