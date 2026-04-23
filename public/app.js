@@ -176,6 +176,7 @@ function renderRopEscalations(items) {
       </div>
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
         ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
         ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
         ${item.sla_breached ? `<span class="badge badge-critical">sla breach</span>` : ''}
@@ -283,6 +284,7 @@ function renderOwnerDashboard(payload) {
         <span class="badge badge-low">own: ${item.own_equipment_available ?? '—'}</span>
         <span class="badge badge-low">subrent: ${item.subrent_required ?? '—'}</span>
         <span class="badge badge-low">debt: ${item.debt_risk ? 'yes' : 'no'}</span>
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
       </div>
     </article>
   `).join('');

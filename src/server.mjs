@@ -518,6 +518,12 @@ export async function buildRopDashboard() {
         escalationReason = 'Сделка живая, но без своей техники.';
       }
 
+      const signalMarkers = [
+        ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
+        ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
+        ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+      ];
+
       return {
         opportunity_id: opportunity.id,
         bitrix_deal_id: opportunity.bitrix_deal_id,
@@ -540,6 +546,7 @@ export async function buildRopDashboard() {
         promise_overdue: state.states.some((item) => item.state_code === 'manager_promise_overdue'),
         sla_breached: state.states.some((item) => item.state_code === 'hot_unworked'),
         action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
+        signal_markers: signalMarkers,
         evidence_summary: {
           competitor_mentions: riskEvidence.counters.competitor_mentions,
           debt_markers: riskEvidence.counters.debt_markers,
@@ -669,6 +676,12 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
         ownerSignal = 'Есть шанс загрузить свою технику.';
       }
 
+      const signalMarkers = [
+        ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
+        ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
+        ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+      ];
+
       return {
         opportunity_id: opportunity.id,
         company: opportunity.company?.raw_value ?? null,
@@ -681,6 +694,7 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
         strategy_flag: strategyFlag,
         owner_signal: ownerSignal,
         recommended_action: decision.recommended_action?.action_name ?? null,
+        signal_markers: signalMarkers,
       };
     })
     .filter((item) => {

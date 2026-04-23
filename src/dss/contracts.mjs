@@ -414,6 +414,10 @@ export const ropEscalationItemSchema = {
       type: 'array',
       items: { type: 'string' },
     },
+    signal_markers: {
+      type: 'array',
+      items: { type: 'string' },
+    },
     state_codes: {
       type: 'array',
       items: { type: 'string' },
@@ -460,6 +464,10 @@ export const ownerDashboardItemSchema = {
     strategy_flag: { type: 'string' },
     owner_signal: { type: ['string', 'null'] },
     recommended_action: { type: ['string', 'null'] },
+    signal_markers: {
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
 };
 
