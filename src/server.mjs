@@ -426,6 +426,61 @@ function collectSignalEvidence(opportunity) {
   };
 }
 
+function buildExtractionQuality(opportunity) {
+  const events = opportunity.communication_events ?? [];
+  const extractionEvents = events
+    .map((event) => event.extraction_json ?? null)
+    .filter(Boolean);
+
+  const confidence = {
+    company: opportunity.company?.confidence_score ?? null,
+    object: opportunity.project_object?.confidence_score ?? null,
+    person: opportunity.contact_person?.confidence_score ?? null,
+    equipment: opportunity.equipment_type?.confidence_score ?? null,
+  };
+
+  const extractedSignalConfidence = {
+    urgency: extractionEvents
+      .map((item) => item.urgency?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+    money: extractionEvents
+      .map((item) => item.money_readiness?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+    decision_access: extractionEvents
+      .map((item) => item.decision_access?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+    competitor: extractionEvents
+      .map((item) => item.competitor?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+    debt_risk: extractionEvents
+      .map((item) => item.debt_risk?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+  };
+
+  const avg = (values) => values.length
+    ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2))
+    : null;
+
+  const fieldConfidence = {
+    ...confidence,
+    urgency: avg(extractedSignalConfidence.urgency),
+    money: avg(extractedSignalConfidence.money),
+    decision_access: avg(extractedSignalConfidence.decision_access),
+    competitor: avg(extractedSignalConfidence.competitor),
+    debt_risk: avg(extractedSignalConfidence.debt_risk),
+  };
+
+  const lowConfidenceFields = Object.entries(fieldConfidence)
+    .filter(([, value]) => value !== null && value < 0.7)
+    .map(([key]) => key);
+
+  return {
+    extracted_events: extractionEvents.length,
+    field_confidence: fieldConfidence,
+    low_confidence_fields: lowConfidenceFields,
+  };
+}
+
 function buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory) {
   const feedbackByRecommendationId = new Map();
   for (const item of feedbackHistory ?? []) {
@@ -774,6 +829,7 @@ export async function buildOpportunityCard(opportunityId) {
   const graph = buildOpportunityGraph(opportunity);
   const similarCases = await getSimilarCases(opportunity, repository);
   const riskEvidence = collectSignalEvidence(opportunity);
+  const extractionQuality = buildExtractionQuality(opportunity);
   const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
   const actionEffectiveness = await getActionEffectivenessMap();
   const stopSignals = buildStopSignals(opportunity, state, decision);
@@ -824,6 +880,7 @@ export async function buildOpportunityCard(opportunityId) {
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,
+    extraction_quality: extractionQuality,
     stop_signals: stopSignals,
     similar_cases_summary: {
       total: similarCases.length,
@@ -956,6 +1013,10 @@ function buildQualityIssues(opportunity) {
   if (!opportunity.last_touch_at) issues.push('last_touch_missing');
   if (!(opportunity.communication_events ?? []).length) issues.push('no_linked_events');
   if (!(opportunity.communication_events ?? []).some((item) => item.channel)) issues.push('channel_missing');
+  const extractionQuality = buildExtractionQuality(opportunity);
+  if (extractionQuality.low_confidence_fields.includes('object')) issues.push('object_low_confidence');
+  if (extractionQuality.low_confidence_fields.includes('equipment')) issues.push('equipment_low_confidence');
+  if (extractionQuality.low_confidence_fields.includes('person')) issues.push('person_low_confidence');
   return issues;
 }
 
@@ -1044,6 +1105,7 @@ export async function buildDataQualityDashboard() {
         object: opportunity.project_object?.raw_value ?? null,
         quality_score: Math.max(0, 100 - (issues.length * 18)),
         issues,
+        extraction_confidence: buildExtractionQuality(opportunity),
       };
     })
     .filter((item) => item.issues.length > 0)

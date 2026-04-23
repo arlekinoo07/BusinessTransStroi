@@ -274,6 +274,17 @@ export const opportunityCardSchema = {
         evidence: { type: 'object' },
       },
     },
+    extraction_quality: {
+      type: 'object',
+      properties: {
+        extracted_events: { type: 'number' },
+        field_confidence: { type: 'object' },
+        low_confidence_fields: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
     stop_signals: {
       type: 'object',
       properties: {
@@ -516,6 +527,17 @@ export const dataQualitySchema = {
           company: { type: ['string', 'null'] },
           object: { type: ['string', 'null'] },
           quality_score: { type: 'number' },
+          extraction_confidence: {
+            type: 'object',
+            properties: {
+              extracted_events: { type: 'number' },
+              field_confidence: { type: 'object' },
+              low_confidence_fields: {
+                type: 'array',
+                items: { type: 'string' },
+              },
+            },
+          },
           issues: {
             type: 'array',
             items: { type: 'string' },

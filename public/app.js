@@ -366,6 +366,7 @@ function renderQualityDashboard(payload) {
       </div>
       <div class="badge-row">
         ${item.issues.map((issue) => `<span class="badge badge-low">${issue}</span>`).join('')}
+        ${(item.extraction_confidence?.low_confidence_fields ?? []).map((field) => `<span class="badge badge-critical">${field} low confidence</span>`).join('')}
       </div>
     </article>
   `).join('');
@@ -633,6 +634,33 @@ function renderRiskEvidence(evidence) {
   `;
 }
 
+function renderExtractionQuality(quality) {
+  if (!quality) {
+    return '<div class="empty">Качество extraction пока не рассчитано.</div>';
+  }
+
+  const confidenceEntries = Object.entries(quality.field_confidence ?? {})
+    .filter(([, value]) => value !== null && value !== undefined);
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Extraction Coverage</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">events: ${quality.extracted_events ?? 0}</span>
+          ${(quality.low_confidence_fields ?? []).map((item) => `<span class="badge badge-critical">${item} low confidence</span>`).join('') || '<span class="badge badge-medium">no low-confidence fields</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Field Confidence</strong>
+        <div class="badge-row">
+          ${confidenceEntries.map(([key, value]) => `<span class="badge badge-low">${key}: ${Math.round(value * 100)}%</span>`).join('') || '<span class="badge badge-low">no confidence data</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDecisionTimeline(items) {
   if (!items?.length) {
     return '<div class="empty">Timeline решений пока пуст.</div>';
@@ -814,6 +842,11 @@ function renderCard(card) {
         <p class="panel-kicker">Risk / Evidence</p>
         <h3>Сигналы и подтверждения</h3>
         ${renderRiskEvidence(card.risk_evidence)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Extraction Quality</p>
+        <h3>Насколько уверенно система поняла коммуникации</h3>
+        ${renderExtractionQuality(card.extraction_quality)}
       </section>
       <section class="card-section full">
         <p class="panel-kicker">Why Not Now / Stop Signals</p>
