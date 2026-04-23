@@ -59,6 +59,27 @@ function makeEdge(source, target, type, properties = {}) {
   return { source, target, type, properties };
 }
 
+function sanitizeNeo4jProperties(properties = {}) {
+  const result = {};
+
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (['string', 'number', 'boolean'].includes(typeof value)) {
+      result[key] = value;
+      continue;
+    }
+
+    if (Array.isArray(value) && value.every((item) => ['string', 'number', 'boolean'].includes(typeof item))) {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
 function buildGraphRecordsFromOpportunity(opportunity) {
   const nodes = [];
   const edges = [];
@@ -145,33 +166,35 @@ async function syncOpportunity(session, opportunity) {
   const graph = buildGraphRecordsFromOpportunity(opportunity);
 
   for (const node of graph.nodes) {
+    const properties = sanitizeNeo4jProperties(node.properties);
     await session.run(
       `
         MERGE (n:${node.type} {external_id: $id})
         SET n.label = $label,
-            n.type = $type,
-            n += $properties
+            n.type = $type
+        ${Object.keys(properties).length ? 'SET n += $properties' : ''}
       `,
       {
         id: node.id,
         label: node.label,
         type: node.type,
-        properties: node.properties,
+        properties,
       },
     );
   }
 
   for (const edge of graph.edges) {
+    const properties = sanitizeNeo4jProperties(edge.properties);
     await session.run(
       `
         MATCH (a {external_id: $source}), (b {external_id: $target})
         MERGE (a)-[r:${edge.type}]->(b)
-        SET r += $properties
+        ${Object.keys(properties).length ? 'SET r += $properties' : ''}
       `,
       {
         source: edge.source,
         target: edge.target,
-        properties: edge.properties,
+        properties,
       },
     );
   }
@@ -334,4 +357,3 @@ export async function getObjectGraphFromNeo4j(objectId) {
     return null;
   });
 }
-
