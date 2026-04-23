@@ -11,6 +11,13 @@ const MONEY_MARKERS = ['кп', 'коммерческое', 'договор', 'с
 const COMPETITOR_MARKERS = ['конкурент', 'дешевле у', 'другая компания', 'уже стоят', 'конкуренты'];
 const SUBRENT_MARKERS = ['субаренда', 'партнер', 'партнёр'];
 const DEBT_RISK_MARKERS = ['дебитор', 'дебиторка', 'просрочка', 'долг', 'не платят', 'задержка оплаты', 'лимит', 'стоп по отгрузке', 'только по предоплате'];
+const DECISION_MAKER_MARKERS = ['лпр', 'директор', 'собственник', 'гендир', 'ген. директор', 'руководитель', 'главный инженер'];
+const INFLUENCER_MARKERS = ['прораб', 'снабженец', 'закупки', 'механик', 'мастер', 'логист'];
+const PAYMENT_READY_MARKERS = ['готовы оплатить', 'готовы к оплате', 'готовы подписать', 'ждет договор', 'ждёт договор', 'просит счет', 'просит счёт', 'нужен счет', 'нужен счёт', 'согласовали кп', 'согласовали договор', 'аванс'];
+const OFFER_STAGE_MARKERS = ['просит кп', 'ждет кп', 'ждёт кп', 'коммерческое предложение', 'отправить кп', 'выслать кп'];
+const CONTRACT_STAGE_MARKERS = ['просит договор', 'нужен договор', 'отправить договор', 'выслать договор', 'на согласование договор'];
+const INVOICE_STAGE_MARKERS = ['просит счет', 'просит счёт', 'нужен счет', 'нужен счёт', 'выставить счет', 'выставить счёт'];
+const TECH_SPEC_MARKERS = ['грузоподъем', 'грузоподъ', 'тонн', 'тн', 'вылет', 'стрела', 'высота', 'глубина', 'объем ковша', 'объём ковша', 'длина', 'смена', 'режим работы', 'график', 'габарит'];
 const NEXT_STEP_MARKERS = [
   ['отправить кп', 'send_offer'],
   ['выслать кп', 'send_offer'],
@@ -184,6 +191,33 @@ function detectMoneyReadiness(text) {
     value: matched.length ? 'commercial' : 'early',
     markers: matched,
     confidence: matched.length ? 0.8 : 0.45,
+  };
+}
+
+function detectDecisionAccess(sourceText) {
+  const lowered = sourceText.toLowerCase();
+  const decisionMarkers = DECISION_MAKER_MARKERS.filter((marker) => lowered.includes(marker));
+  if (decisionMarkers.length) {
+    return {
+      value: 'decision_maker',
+      markers: decisionMarkers,
+      confidence: 0.86,
+    };
+  }
+
+  const influencerMarkers = INFLUENCER_MARKERS.filter((marker) => lowered.includes(marker));
+  if (influencerMarkers.length) {
+    return {
+      value: 'influencer',
+      markers: influencerMarkers,
+      confidence: 0.7,
+    };
+  }
+
+  return {
+    value: 'unknown',
+    markers: [],
+    confidence: 0.35,
   };
 }
 
@@ -363,6 +397,47 @@ function detectRequestedStartAt(sourceText) {
   return parseDateHint(scheduleSentence);
 }
 
+function detectCommercialStage(sourceText) {
+  const lowered = sourceText.toLowerCase();
+  if (CONTRACT_STAGE_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'contract_requested';
+  }
+
+  if (INVOICE_STAGE_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'invoice_requested';
+  }
+
+  if (OFFER_STAGE_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'offer_requested';
+  }
+
+  return 'qualified';
+}
+
+function detectPaymentReadiness(sourceText) {
+  const lowered = sourceText.toLowerCase();
+  if (PAYMENT_READY_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'ready';
+  }
+
+  if (MONEY_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'commercial';
+  }
+
+  return 'early';
+}
+
+function detectTechnicalRequirements(sourceText) {
+  const sentences = splitSentences(sourceText);
+  const collected = sentences.filter((sentence) => {
+    const lowered = sentence.toLowerCase();
+    return TECH_SPEC_MARKERS.some((marker) => lowered.includes(marker))
+      || /\b\d+\s*(?:т|тонн|м|метр|метров|час|смен)\b/i.test(sentence);
+  });
+
+  return Array.from(new Set(collected.map((item) => cleanText(item)).filter(Boolean))).slice(0, 6);
+}
+
 function detectNoise(sourceText) {
   const lowered = sourceText.toLowerCase();
   const matchedMarkers = SYSTEM_NOISE_MARKERS.filter((marker) => lowered.includes(marker));
@@ -396,6 +471,10 @@ export function extractEntitiesFromText(text) {
   const requestedStartAt = detectRequestedStartAt(sourceText);
   const requestedDurationDays = parseDurationHint(sourceText);
   const noise = detectNoise(sourceText);
+  const decisionAccess = detectDecisionAccess(sourceText);
+  const commercialStage = detectCommercialStage(sourceText);
+  const paymentReadiness = detectPaymentReadiness(sourceText);
+  const technicalRequirements = detectTechnicalRequirements(sourceText);
 
   return {
     company: detectCompany(sourceText),
@@ -405,9 +484,13 @@ export function extractEntitiesFromText(text) {
     equipment_type: detectEquipment(sourceText),
     urgency: detectUrgency(sourceText),
     money_readiness: detectMoneyReadiness(sourceText),
+    decision_access: decisionAccess,
     competitor: detectCompetitor(sourceText),
     supply_mode: detectSupplyMode(sourceText),
     debt_risk: detectDebtRisk(sourceText),
+    commercial_stage: commercialStage,
+    payment_readiness: paymentReadiness,
+    technical_requirements: technicalRequirements,
     next_touch_hint: nextStep.raw_value,
     next_touch_action_code: nextStep.action_code,
     next_touch_due_at: nextStep.due_at,

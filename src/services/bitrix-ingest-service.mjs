@@ -71,6 +71,9 @@ function deriveCommercialStage(stageId, textSignals) {
   const stage = String(stageId ?? '').toLowerCase();
   if (stage.includes('won')) return 'won';
   if (stage.includes('lose')) return 'lost';
+  if (textSignals.commercial_stage && textSignals.commercial_stage !== 'qualified') {
+    return textSignals.commercial_stage;
+  }
   if (textSignals.money_readiness.value === 'commercial' && textSignals.next_touch_hint?.toLowerCase().includes('договор')) {
     return 'contract_requested';
   }
@@ -176,9 +179,13 @@ export function buildBitrixEntityPatch(event) {
       equipment_type: equipmentName ? normalizeEquipmentType(equipmentName) : null,
       title: firstNonEmpty(record.TITLE, `Сделка ${event.entity_id}`),
       commercial_scenario: record.TYPE_ID?.toLowerCase() === 'sale' ? 'rental' : 'mixed',
-      decision_access_status: extracted.person?.raw_value?.toLowerCase().includes('лпр') ? 'decision_maker' : 'influencer',
+      decision_access_status: extracted.decision_access?.value === 'unknown'
+        ? (extracted.person?.raw_value?.toLowerCase().includes('лпр') ? 'decision_maker' : 'influencer')
+        : extracted.decision_access.value,
       commercial_stage: deriveCommercialStage(record.STAGE_ID, extracted),
-      payment_readiness: extracted.money_readiness.value === 'commercial' ? 'ready' : 'early',
+      payment_readiness: extracted.payment_readiness === 'early'
+        ? (extracted.money_readiness.value === 'commercial' ? 'ready' : 'early')
+        : extracted.payment_readiness,
       requested_start_at: toIsoDate(firstNonEmpty(record.BEGINDATE, record.UF_CRM_START_DATE, extracted.requested_start_at, record.CLOSEDATE)),
       requested_duration_days: cleanupNumber(firstNonEmpty(record.UF_CRM_DURATION_DAYS, record.DURATION_DAYS, extracted.requested_duration_days)),
       expected_margin_percent: cleanupNumber(firstNonEmpty(record.UF_CRM_MARGIN_PCT, record.UF_CRM_EXPECTED_MARGIN)),
@@ -191,7 +198,7 @@ export function buildBitrixEntityPatch(event) {
       next_step_code: firstNonEmpty(record.UF_CRM_NEXT_STEP_CODE, extracted.next_touch_action_code, extracted.next_touch_hint ? 'follow_up_reminder' : null),
       next_step_due_at: toIsoDate(firstNonEmpty(record.UF_CRM_NEXT_STEP_DUE_AT, extracted.next_touch_due_at, extracted.manager_promise?.due_at)),
       next_step_description: extracted.next_touch_hint,
-      technical_requirements: [record.UF_CRM_TECH_SPECS, record.UF_CRM_WORK_CONDITIONS].filter(Boolean),
+      technical_requirements: [...new Set([record.UF_CRM_TECH_SPECS, record.UF_CRM_WORK_CONDITIONS, ...(extracted.technical_requirements ?? [])].filter(Boolean))],
       score_overrides: {
         need: cleanupNumber(record.UF_CRM_NEED_SCORE),
         time: cleanupNumber(record.UF_CRM_TIME_SCORE),
@@ -234,9 +241,13 @@ export function buildBitrixEntityPatch(event) {
       raw_text: text,
       requested_start_at: extracted.requested_start_at,
       requested_duration_days: extracted.requested_duration_days,
+      decision_access_status: extracted.decision_access?.value ?? null,
+      commercial_stage: extracted.commercial_stage ?? null,
+      payment_readiness: extracted.payment_readiness ?? null,
       next_step_code: extracted.next_touch_action_code,
       next_step_due_at: extracted.next_touch_due_at ?? extracted.manager_promise?.due_at ?? null,
       next_step_description: extracted.next_touch_hint ?? extracted.manager_promise?.raw_value ?? null,
+      technical_requirements: extracted.technical_requirements ?? [],
       subrent_required: extracted.supply_mode === 'subrent' ? true : null,
       competitor_present: extracted.competitor?.mentioned ? true : null,
       debt_risk_flag: extracted.debt_risk?.mentioned ? true : null,

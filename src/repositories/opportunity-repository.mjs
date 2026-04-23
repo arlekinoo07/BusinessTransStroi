@@ -454,6 +454,13 @@ export class InMemoryOpportunityRepository {
             opportunity.project_object = patch.project_object ?? opportunity.project_object;
             opportunity.address = patch.address ?? opportunity.address;
             opportunity.equipment_type = patch.equipment_type ?? opportunity.equipment_type;
+            opportunity.decision_access_status = patch.decision_access_status ?? opportunity.decision_access_status ?? null;
+            opportunity.commercial_stage = patch.commercial_stage ?? opportunity.commercial_stage ?? null;
+            opportunity.payment_readiness = patch.payment_readiness ?? opportunity.payment_readiness ?? null;
+            opportunity.technical_requirements = Array.from(new Set([
+              ...(opportunity.technical_requirements ?? []),
+              ...(patch.technical_requirements ?? []),
+            ])).filter(Boolean);
             opportunity.time_window = {
               start_at: patch.requested_start_at ?? opportunity.time_window?.start_at ?? null,
               duration_days: patch.requested_duration_days ?? opportunity.time_window?.duration_days ?? null,

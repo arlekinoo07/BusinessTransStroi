@@ -477,14 +477,21 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
         person_id = COALESCE(person_id, $3),
         project_object_id = COALESCE(project_object_id, $4),
         equipment_type_id = COALESCE(equipment_type_id, $5),
-        requested_start_at = COALESCE(requested_start_at, $6),
-        requested_duration_days = COALESCE(requested_duration_days, $7),
-        next_step_code = COALESCE(next_step_code, $8),
-        next_step_due_at = COALESCE(next_step_due_at, $9),
-        next_step_description = COALESCE(next_step_description, $10),
-        last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($11, '-infinity'::timestamptz)),
-        subrent_required = COALESCE(subrent_required, $12),
-        credit_limit_blocked = COALESCE(credit_limit_blocked, $13),
+        decision_access_status = COALESCE(decision_access_status, $6),
+        commercial_stage = COALESCE(commercial_stage, $7),
+        payment_readiness = COALESCE(payment_readiness, $8),
+        requested_start_at = COALESCE(requested_start_at, $9),
+        requested_duration_days = COALESCE(requested_duration_days, $10),
+        next_step_code = COALESCE(next_step_code, $11),
+        next_step_due_at = COALESCE(next_step_due_at, $12),
+        next_step_description = COALESCE(next_step_description, $13),
+        last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($14, '-infinity'::timestamptz)),
+        subrent_required = COALESCE(subrent_required, $15),
+        credit_limit_blocked = COALESCE(credit_limit_blocked, $16),
+        debt_overdue_days = CASE
+          WHEN $17 THEN GREATEST(COALESCE(debt_overdue_days, 0), 1)
+          ELSE debt_overdue_days
+        END,
         updated_at = NOW()
       WHERE id = $1
     `,
@@ -494,6 +501,9 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
       personId,
       projectObjectId,
       equipmentTypeId,
+      patch.decision_access_status ?? null,
+      patch.commercial_stage ?? null,
+      patch.payment_readiness ?? null,
       patch.requested_start_at ?? null,
       patch.requested_duration_days ?? null,
       patch.next_step_code ?? null,
@@ -502,8 +512,24 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
       patch.event_datetime ?? null,
       patch.subrent_required ?? null,
       patch.credit_limit_blocked ?? null,
+      patch.debt_risk_flag === true,
     ],
   );
+
+  for (const requirement of patch.technical_requirements ?? []) {
+    await client.query(
+      `
+        INSERT INTO opportunity_technical_requirements (opportunity_id, requirement_value)
+        SELECT $1, $2
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM opportunity_technical_requirements
+          WHERE opportunity_id = $1 AND requirement_value = $2
+        )
+      `,
+      [opportunityId, requirement],
+    );
+  }
 }
 
 export class PostgresOpportunityRepository {
