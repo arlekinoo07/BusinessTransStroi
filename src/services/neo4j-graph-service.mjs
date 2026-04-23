@@ -273,7 +273,9 @@ export async function getNeo4jStatus() {
   try {
     const info = await withSession('READ', async (session) => {
       const probe = await session.run('RETURN 1 AS ok');
-      return { ok: probe.records[0]?.get('ok') === 1 };
+      const value = probe.records[0]?.get('ok');
+      const normalized = typeof value?.toNumber === 'function' ? value.toNumber() : value;
+      return { ok: normalized === 1 };
     });
 
     return {
