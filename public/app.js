@@ -2,6 +2,7 @@ const els = {
   refreshAll: document.querySelector('#refreshAll'),
   loadFirstCard: document.querySelector('#loadFirstCard'),
   processIngestButton: document.querySelector('#processIngestButton'),
+  retryIngestButton: document.querySelector('#retryIngestButton'),
   loadCardButton: document.querySelector('#loadCardButton'),
   queueLimit: document.querySelector('#queueLimit'),
   queueBucket: document.querySelector('#queueBucket'),
@@ -1172,6 +1173,17 @@ els.processIngestButton.addEventListener('click', async () => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ limit: 50 }),
+  });
+  await refreshAll();
+});
+els.retryIngestButton.addEventListener('click', async () => {
+  await api('/events/bitrix/retry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      statuses: ['failed', 'suspicious'],
+      limit: 100,
+    }),
   });
   await refreshAll();
 });

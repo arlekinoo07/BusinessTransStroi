@@ -368,7 +368,7 @@ export class InMemoryOpportunityRepository {
 
   async listFailedIngestEvents(limit = 100) {
     return ingestEventStore
-      .filter((event) => event.processing_status === 'failed')
+      .filter((event) => ['failed', 'suspicious'].includes(event.processing_status))
       .slice(0, limit)
       .map(clone);
   }
@@ -420,6 +420,25 @@ export class InMemoryOpportunityRepository {
       .filter((event) => event.processing_status === 'pending')
       .slice(0, limit)
       .map(clone);
+  }
+
+  async retryIngestEvents({ statuses = ['failed', 'suspicious'], limit = 50 } = {}) {
+    const normalizedStatuses = new Set(statuses);
+    const retried = [];
+
+    for (const event of ingestEventStore) {
+      if (retried.length >= limit) break;
+      if (!normalizedStatuses.has(event.processing_status)) continue;
+      event.processing_status = 'pending';
+      event.error_message = null;
+      event.updated_at = new Date().toISOString();
+      retried.push(clone(event));
+    }
+
+    return {
+      retried_count: retried.length,
+      items: retried,
+    };
   }
 
   async processPendingIngestEvents(limit = 50) {

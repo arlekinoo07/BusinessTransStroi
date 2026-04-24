@@ -1495,6 +1495,34 @@ export class PostgresOpportunityRepository {
     return rows;
   }
 
+  async retryIngestEvents({ statuses = ['failed', 'suspicious'], limit = 50 } = {}) {
+    const { rows } = await query(
+      `
+        WITH picked AS (
+          SELECT id
+          FROM ingest_events
+          WHERE processing_status = ANY($1::text[])
+          ORDER BY updated_at DESC
+          LIMIT $2
+        )
+        UPDATE ingest_events ie
+        SET
+          processing_status = 'pending',
+          error_message = NULL,
+          updated_at = NOW()
+        FROM picked
+        WHERE ie.id = picked.id
+        RETURNING ie.*
+      `,
+      [statuses, limit],
+    );
+
+    return {
+      retried_count: rows.length,
+      items: rows,
+    };
+  }
+
   async processPendingIngestEvents(limit = 50) {
     const pending = await this.listPendingIngestEvents(limit);
     const processed = [];

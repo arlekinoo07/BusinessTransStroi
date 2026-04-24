@@ -115,7 +115,10 @@
               <p class="panel-kicker">Ingest Monitor</p>
               <h2>Очередь и ошибки интеграции</h2>
             </div>
-            <button id="processIngestButton" class="button button-secondary">Прогнать ingest</button>
+            <div class="queue-controls">
+              <button id="retryIngestButton" class="button button-secondary">Повторить ошибки</button>
+              <button id="processIngestButton" class="button button-secondary">Прогнать ingest</button>
+            </div>
           </div>
           <div class="monitor-grid">
             <div class="monitor-block">

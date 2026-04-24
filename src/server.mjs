@@ -1348,6 +1348,25 @@ export function createAppServer() {
         });
       }
 
+      if (request.method === 'POST' && url.pathname === '/events/bitrix/retry') {
+        const denied = requirePermission(auth, 'dashboard.data_quality');
+        if (denied) return sendJson(response, 403, denied);
+        const payload = await readJson(request).catch(() => ({}));
+        const limit = Number(payload?.limit ?? 50);
+        const statuses = Array.isArray(payload?.statuses) && payload.statuses.length
+          ? payload.statuses
+          : ['failed', 'suspicious'];
+        const result = await repository.retryIngestEvents({ statuses, limit });
+        await writeAuditLog(auth, 'bitrix_ingest_retry', 'ingest_batch', `retry:${Date.now()}`, {
+          retried_count: result.retried_count,
+          statuses,
+        });
+        return sendJson(response, 200, {
+          ok: true,
+          ...result,
+        });
+      }
+
       if (request.method === 'POST' && url.pathname === '/events/bitrix/process') {
         const denied = requirePermission(auth, 'dashboard.data_quality');
         if (denied) return sendJson(response, 403, denied);
