@@ -426,6 +426,7 @@ function renderQualityDashboard(payload) {
 
 function renderNormalizationDashboard(payload) {
   const summary = payload.summary ?? {};
+  const priorityBreakdown = summary.priority_breakdown ?? [];
   els.normalizationSummary.innerHTML = `
     <div class="stat-card">
       <span class="stat-label">Companies</span>
@@ -443,6 +444,12 @@ function renderNormalizationDashboard(payload) {
       <span class="stat-label">Candidates</span>
       <strong>${summary.duplicate_candidates ?? 0}</strong>
     </div>
+    ${priorityBreakdown.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.priority_code}</span>
+        <strong>${item.count}</strong>
+      </div>
+    `).join('')}
   `;
 
   const items = payload.items ?? [];
@@ -461,7 +468,9 @@ function renderNormalizationDashboard(payload) {
         <span class="badge badge-high">${item.entity_kind} · ${item.similarity_score}</span>
       </div>
       <div class="muted">suggested id: ${item.suggested_resolved_entity_id ?? '—'}</div>
+      <div class="muted">action: ${item.suggested_action ?? '—'}</div>
       <div class="badge-row">
+        <span class="badge badge-${item.merge_priority === 'merge_now' ? 'critical' : item.merge_priority === 'review_fast' ? 'high' : 'low'}">${item.merge_priority ?? 'review'}</span>
         ${(item.match_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
       </div>
     </article>

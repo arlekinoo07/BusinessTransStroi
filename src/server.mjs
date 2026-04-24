@@ -1244,8 +1244,30 @@ export async function buildNormalizationDashboard() {
       }),
     }),
   ]
+    .map((item) => {
+      const priority = item.similarity_score >= 0.92
+        ? 'merge_now'
+        : item.similarity_score >= 0.84
+          ? 'review_fast'
+          : 'review';
+      return {
+        ...item,
+        merge_priority: priority,
+        suggested_action: priority === 'merge_now'
+          ? 'Объединить автоматически после проверки'
+          : priority === 'review_fast'
+            ? 'Проверить и объединить вручную в первую очередь'
+            : 'Оставить в очереди на ручную верификацию',
+      };
+    })
     .sort((left, right) => right.similarity_score - left.similarity_score)
     .slice(0, 50);
+  const priorityBreakdown = ['merge_now', 'review_fast', 'review']
+    .map((priority_code) => ({
+      priority_code,
+      count: candidates.filter((item) => item.merge_priority === priority_code).length,
+    }))
+    .filter((item) => item.count > 0);
 
   return {
     summary: {
@@ -1253,6 +1275,7 @@ export async function buildNormalizationDashboard() {
       objects_seen: objects.length,
       persons_seen: persons.length,
       duplicate_candidates: candidates.length,
+      priority_breakdown: priorityBreakdown,
     },
     items: candidates,
   };
