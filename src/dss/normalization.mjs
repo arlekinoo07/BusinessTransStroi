@@ -128,6 +128,89 @@ export function findDuplicateCandidates(items, {
     .slice(0, 100);
 }
 
+export function findContextualDuplicateCandidates(items, {
+  threshold = 0.78,
+  kind = 'entity',
+  getReferenceId = (item, index) => item?.resolved_entity_id ?? `${kind}:${index}`,
+  getLabel = (item) => item?.raw_value ?? item?.normalized_value ?? '',
+  getPrimary = (item) => item?.normalized_value ?? item?.raw_value ?? '',
+  getContext = () => ({}),
+} = {}) {
+  const candidates = [];
+
+  for (let index = 0; index < items.length; index += 1) {
+    for (let cursor = index + 1; cursor < items.length; cursor += 1) {
+      const left = items[index];
+      const right = items[cursor];
+      const leftPrimary = getPrimary(left);
+      const rightPrimary = getPrimary(right);
+      const leftLabel = getLabel(left);
+      const rightLabel = getLabel(right);
+      if (!leftPrimary || !rightPrimary || !leftLabel || !rightLabel) {
+        continue;
+      }
+
+      const baseScore = scoreEntitySimilarity(leftPrimary, rightPrimary);
+      const leftContext = getContext(left) ?? {};
+      const rightContext = getContext(right) ?? {};
+      const reasons = [];
+      let bonus = 0;
+
+      if (leftContext.address && rightContext.address) {
+        const addressScore = scoreEntitySimilarity(leftContext.address, rightContext.address);
+        if (addressScore >= 0.72) {
+          bonus += 0.18;
+          reasons.push('address_match');
+        }
+      }
+
+      if (leftContext.role && rightContext.role) {
+        const roleScore = scoreEntitySimilarity(leftContext.role, rightContext.role);
+        if (roleScore >= 0.85) {
+          bonus += 0.1;
+          reasons.push('role_match');
+        }
+      }
+
+      if (leftContext.equipment && rightContext.equipment) {
+        const equipmentScore = scoreEntitySimilarity(leftContext.equipment, rightContext.equipment);
+        if (equipmentScore >= 0.85) {
+          bonus += 0.1;
+          reasons.push('equipment_match');
+        }
+      }
+
+      if (leftContext.company && rightContext.company) {
+        const companyScore = scoreEntitySimilarity(leftContext.company, rightContext.company);
+        if (companyScore >= 0.8) {
+          bonus += 0.12;
+          reasons.push('company_match');
+        }
+      }
+
+      const similarity = Number(Math.min(1, baseScore + bonus).toFixed(3));
+      if (similarity < threshold) {
+        continue;
+      }
+
+      candidates.push({
+        entity_kind: kind,
+        left_ref: getReferenceId(left, index),
+        right_ref: getReferenceId(right, cursor),
+        left_label: leftLabel,
+        right_label: rightLabel,
+        similarity_score: similarity,
+        match_reasons: ['name_match', ...reasons],
+        suggested_resolved_entity_id: stableEntityId(kind, leftPrimary || rightPrimary, `${leftLabel} ${rightLabel}`),
+      });
+    }
+  }
+
+  return candidates
+    .sort((left, right) => right.similarity_score - left.similarity_score)
+    .slice(0, 100);
+}
+
 export function normalizeCompanyName(rawValue) {
   const raw = cleanupText(rawValue);
   const normalized = normalizeToken(raw)

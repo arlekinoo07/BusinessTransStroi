@@ -8,7 +8,7 @@ import { getContractsOverview } from './dss/contracts.mjs';
 import { adaptBitrixWebhookPayload } from './bitrix-webhook-adapter.mjs';
 import { decideNextAction } from './dss/decision-engine.mjs';
 import { extractEntitiesFromText } from './dss/nlp-extraction.mjs';
-import { findDuplicateCandidates } from './dss/normalization.mjs';
+import { findContextualDuplicateCandidates, findDuplicateCandidates } from './dss/normalization.mjs';
 import { requirePermission, resolveAuthContext } from './services/auth-permissions-service.mjs';
 import {
   getNeo4jStatus,
@@ -1140,6 +1140,8 @@ export async function buildNormalizationDashboard() {
     .filter((item) => item.project_object?.raw_value)
     .map((item) => ({
       opportunity_id: item.id,
+      address: item.address?.normalized_value ?? item.address?.raw_value ?? null,
+      equipment: item.equipment_type?.normalized_value ?? item.equipment_type?.raw_value ?? null,
       ...item.project_object,
     }));
 
@@ -1151,6 +1153,8 @@ export async function buildNormalizationDashboard() {
       normalized_value: item.contact_person.normalized_value,
       resolved_entity_id: item.contact_person.resolved_entity_id,
       confidence_score: item.contact_person.confidence_score,
+      role: item.contact_person.role ?? null,
+      company: item.company?.normalized_value ?? item.company?.raw_value ?? null,
     }));
 
   const candidates = [
@@ -1158,14 +1162,23 @@ export async function buildNormalizationDashboard() {
       kind: 'company',
       getReferenceId: (item) => `${item.opportunity_id}:${item.resolved_entity_id ?? item.raw_value}`,
     }),
-    ...findDuplicateCandidates(objects, {
+    ...findContextualDuplicateCandidates(objects, {
       kind: 'object',
+      threshold: 0.74,
       getReferenceId: (item) => `${item.opportunity_id}:${item.resolved_entity_id ?? item.raw_value}`,
+      getContext: (item) => ({
+        address: item.address,
+        equipment: item.equipment,
+      }),
     }),
-    ...findDuplicateCandidates(persons, {
+    ...findContextualDuplicateCandidates(persons, {
       kind: 'person',
-      threshold: 0.82,
+      threshold: 0.8,
       getReferenceId: (item) => `${item.opportunity_id}:${item.resolved_entity_id ?? item.raw_value}`,
+      getContext: (item) => ({
+        role: item.role,
+        company: item.company,
+      }),
     }),
   ]
     .sort((left, right) => right.similarity_score - left.similarity_score)

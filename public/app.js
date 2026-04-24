@@ -416,6 +416,9 @@ function renderNormalizationDashboard(payload) {
         <span class="badge badge-high">${item.entity_kind} · ${item.similarity_score}</span>
       </div>
       <div class="muted">suggested id: ${item.suggested_resolved_entity_id ?? '—'}</div>
+      <div class="badge-row">
+        ${(item.match_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
+      </div>
     </article>
   `).join('');
 }
