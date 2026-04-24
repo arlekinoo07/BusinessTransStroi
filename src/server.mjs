@@ -591,6 +591,7 @@ export async function buildRopDashboard() {
         ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
         ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
         ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+        ...(state.states.some((item) => item.state_code === 'extraction_low_confidence') ? ['verify extraction'] : []),
       ];
 
       return {
@@ -754,6 +755,7 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
         ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
         ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
         ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+        ...(state.states.some((item) => item.state_code === 'extraction_low_confidence') ? ['verify extraction'] : []),
       ];
 
       return {
@@ -783,6 +785,8 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
   const subrentCount = opportunities.filter((item) => item.economic_assessment?.subrent_required === true).length;
   const debtRiskCount = opportunities.filter((item) =>
     (item.financial_risk?.debt_overdue_days ?? 0) > 0 || item.financial_risk?.credit_limit_blocked).length;
+  const confidenceGuardCount = opportunities.filter((item) =>
+    evaluateOpportunityState(item).states.some((state) => state.state_code === 'extraction_low_confidence')).length;
   const avgMarginSource = opportunities
     .map((item) => item.economic_assessment?.expected_margin_percent)
     .filter((value) => value !== null && value !== undefined);
@@ -800,6 +804,7 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
       own_equipment_share: Math.round((ownEquipmentCount / totalOpportunities) * 100),
       subrent_dependency_share: Math.round((subrentCount / totalOpportunities) * 100),
       debt_exposure_share: Math.round((debtRiskCount / totalOpportunities) * 100),
+      confidence_guard_share: Math.round((confidenceGuardCount / totalOpportunities) * 100),
       average_margin_percent: averageMargin,
       recommendation_accepted_rate: Math.round((feedback.summary?.accepted_rate ?? 0) * 100),
       recommendation_executed_rate: Math.round((feedback.summary?.executed_rate ?? 0) * 100),

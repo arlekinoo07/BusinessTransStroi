@@ -249,6 +249,10 @@ function renderOwnerDashboard(payload) {
       <strong>${summary.debt_exposure_share ?? 0}%</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Confidence Guard</span>
+      <strong>${summary.confidence_guard_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Avg Margin</span>
       <strong>${summary.average_margin_percent ?? '—'}%</strong>
     </div>

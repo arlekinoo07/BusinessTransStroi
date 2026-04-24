@@ -537,6 +537,7 @@ export const ownerDashboardSchema = {
         own_equipment_share: { type: 'number' },
         subrent_dependency_share: { type: 'number' },
         debt_exposure_share: { type: 'number' },
+        confidence_guard_share: { type: 'number' },
         average_margin_percent: { type: ['number', 'null'] },
         recommendation_accepted_rate: { type: 'number' },
         recommendation_executed_rate: { type: 'number' },
