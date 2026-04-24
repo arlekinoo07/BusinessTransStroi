@@ -1005,7 +1005,7 @@ async function loadIngestMonitor() {
     `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status}</div>`,
   );
   renderSimpleList(els.errorList, errors.items, (item) =>
-    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.error_message ?? 'Без сообщения'}</div>`,
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · ${item.error_message ?? 'Без сообщения'}</div>`,
   );
 
   return { pending: pending.items, errors: errors.items };

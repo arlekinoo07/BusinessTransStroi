@@ -121,12 +121,22 @@ function findOpportunityByPatch(patch) {
         score += 2.5;
       }
 
-      return { opportunity, score };
+      return {
+        opportunity,
+        score,
+      };
     })
     .filter((item) => item.score >= 3)
     .sort((left, right) => right.score - left.score);
 
-  return scored[0]?.opportunity ?? null;
+  const best = scored[0] ?? null;
+  if (!best) return null;
+  return {
+    opportunity: best.opportunity,
+    match_type: 'contextual',
+    match_score: best.score,
+    suspicious: best.score < 5,
+  };
 }
 
 export class InMemoryOpportunityRepository {
@@ -460,7 +470,8 @@ export class InMemoryOpportunityRepository {
       }
 
       if (patch.kind === 'communication_event') {
-        const matchedOpportunity = findOpportunityByPatch(patch);
+        const matched = findOpportunityByPatch(patch);
+        const matchedOpportunity = matched?.opportunity ?? null;
         const opportunityExternalId = patch.opportunity_external_id ? String(patch.opportunity_external_id) : null;
         if (matchedOpportunity || opportunityExternalId) {
           const opportunity = matchedOpportunity ?? ensureOpportunity(opportunityExternalId);
@@ -516,9 +527,10 @@ export class InMemoryOpportunityRepository {
 
       let recalculated = null;
       if (patch.kind === 'deal' || patch.kind === 'communication_event') {
+        const matched = patch.kind === 'communication_event' ? findOpportunityByPatch(patch) : null;
         const targetOpportunityId = patch.kind === 'deal'
           ? String(patch.external_id)
-          : (findOpportunityByPatch(patch)?.id ?? (patch.opportunity_external_id ? String(patch.opportunity_external_id) : null));
+          : (matched?.opportunity?.id ?? (patch.opportunity_external_id ? String(patch.opportunity_external_id) : null));
 
         if (targetOpportunityId && opportunityStore.has(targetOpportunityId)) {
           const opportunity = opportunityStore.get(targetOpportunityId);
@@ -532,13 +544,16 @@ export class InMemoryOpportunityRepository {
         }
       }
 
-      event.processing_status = 'processed';
+      const suspicious = patch.kind === 'communication_event' && findOpportunityByPatch(patch)?.suspicious === true;
+      event.processing_status = suspicious ? 'suspicious' : 'processed';
+      event.error_message = suspicious ? 'Suspicious contextual match during ingest resolution' : null;
       event.updated_at = new Date().toISOString();
       processed.push({
         ingest_event_id: event.id,
         kind: patch.kind,
         external_id: patch.external_id,
         recalculated,
+        suspicious,
       });
     }
 

@@ -264,7 +264,12 @@ async function resolveOpportunityDbId(client, patch) {
     );
 
     if (direct.rows[0]?.id) {
-      return direct.rows[0].id;
+      return {
+        id: direct.rows[0].id,
+        match_type: 'direct_opportunity',
+        match_score: 1,
+        suspicious: false,
+      };
     }
   }
 
@@ -282,7 +287,12 @@ async function resolveOpportunityDbId(client, patch) {
     );
 
     if (byContact.rows[0]?.id) {
-      return byContact.rows[0].id;
+      return {
+        id: byContact.rows[0].id,
+        match_type: 'bitrix_contact',
+        match_score: 1,
+        suspicious: false,
+      };
     }
   }
 
@@ -300,7 +310,12 @@ async function resolveOpportunityDbId(client, patch) {
     );
 
     if (byCompany.rows[0]?.id) {
-      return byCompany.rows[0].id;
+      return {
+        id: byCompany.rows[0].id,
+        match_type: 'bitrix_company',
+        match_score: 1,
+        suspicious: false,
+      };
     }
   }
 
@@ -318,7 +333,12 @@ async function resolveOpportunityDbId(client, patch) {
     );
 
     if (byObject.rows[0]?.id) {
-      return byObject.rows[0].id;
+      return {
+        id: byObject.rows[0].id,
+        match_type: 'normalized_object',
+        match_score: 0.85,
+        suspicious: false,
+      };
     }
   }
 
@@ -358,7 +378,13 @@ async function resolveOpportunityDbId(client, patch) {
   );
 
   if (contextual.rows[0]?.id) {
-    return contextual.rows[0].id;
+    const matchScore = Number(contextual.rows[0].match_score ?? 0);
+    return {
+      id: contextual.rows[0].id,
+      match_type: 'contextual',
+      match_score: matchScore,
+      suspicious: matchScore < 5,
+    };
   }
 
   return null;
@@ -644,7 +670,7 @@ export class PostgresOpportunityRepository {
       `
         SELECT *
         FROM ingest_events
-        WHERE processing_status = 'failed'
+        WHERE processing_status IN ('failed', 'suspicious')
         ORDER BY updated_at DESC
         LIMIT $1
       `,
@@ -1479,22 +1505,30 @@ export class PostgresOpportunityRepository {
         const recalculated = result.opportunity_external_id
           ? await this.refreshOpportunityAfterIngest(result.opportunity_external_id)
           : null;
+        const suspicious = result.match_diagnostics?.suspicious === true;
         await query(
           `
             UPDATE ingest_events
             SET
-              processing_status = 'processed',
-              error_message = NULL,
+              processing_status = $2,
+              error_message = $3,
               updated_at = NOW()
             WHERE id = $1
           `,
-          [ingestEvent.id],
+          [
+            ingestEvent.id,
+            suspicious ? 'suspicious' : 'processed',
+            suspicious
+              ? `Suspicious ${result.match_diagnostics.match_type} match (score=${result.match_diagnostics.match_score})`
+              : null,
+          ],
         );
 
         processed.push({
           ingest_event_id: ingestEvent.id,
           ...result,
           recalculated,
+          suspicious,
         });
       } catch (error) {
         await query(
@@ -1891,7 +1925,12 @@ export class PostgresOpportunityRepository {
       }
 
       if (patch.kind === 'communication_event') {
-        const opportunityId = await resolveOpportunityDbId(client, patch);
+        const resolution = await resolveOpportunityDbId(client, patch);
+        const opportunityId = resolution?.id ?? null;
+
+        if (!opportunityId) {
+          throw new Error(`Unable to resolve opportunity for communication event ${patch.external_id}`);
+        }
 
         await client.query(
           `
@@ -1934,6 +1973,7 @@ export class PostgresOpportunityRepository {
           kind: patch.kind,
           external_id: patch.external_id,
           opportunity_external_id: patch.opportunity_external_id ? String(patch.opportunity_external_id) : null,
+          match_diagnostics: resolution,
         };
       }
 
