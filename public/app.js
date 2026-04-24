@@ -346,6 +346,10 @@ function renderQualityDashboard(payload) {
       <strong>${summary.unresolved_ingest_events ?? 0}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Opportunities At Risk</span>
+      <strong>${summary.opportunities_with_ingest_risk ?? 0}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Normalization Records</span>
       <strong>${summary.normalization_records ?? 0}</strong>
     </div>

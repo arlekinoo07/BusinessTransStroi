@@ -1074,6 +1074,7 @@ export async function buildDataQualityDashboard() {
   const ingestUnresolvedCount = failedIngest.filter((item) =>
     String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
   const ingestIssueMap = buildIngestIssueMap(failedIngest);
+  const opportunitiesWithIngestRisk = ingestIssueMap.size;
   const linkedEventsCount = opportunities.filter((item) => (item.communication_events ?? []).length > 0).length;
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
@@ -1169,6 +1170,7 @@ export async function buildDataQualityDashboard() {
       failed_ingest_events: ingestFailedCount,
       suspicious_ingest_events: ingestSuspiciousCount,
       unresolved_ingest_events: ingestUnresolvedCount,
+      opportunities_with_ingest_risk: opportunitiesWithIngestRisk,
       normalization_records: normalizationResults.length,
       critical_fields: coverageMetrics,
     },

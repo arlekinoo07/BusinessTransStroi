@@ -521,6 +521,7 @@ export const dataQualitySchema = {
         failed_ingest_events: { type: 'number' },
         suspicious_ingest_events: { type: 'number' },
         unresolved_ingest_events: { type: 'number' },
+        opportunities_with_ingest_risk: { type: 'number' },
         normalization_records: { type: 'number' },
         critical_fields: {
           type: 'array',
