@@ -895,6 +895,19 @@ function renderCard(card) {
         <div class="history-list">
           ${(card.recommendation.explainability?.why_important ?? []).map((item) => `<div class="history-item">${item}</div>`).join('') || '<div class="empty">Пока без explainability.</div>'}
         </div>
+        <div class="history-list" style="margin-top: 12px;">
+          <div class="history-item">
+            <strong>Почему именно это действие</strong>
+            <div class="muted">${card.recommendation.explainability?.why_this_action ?? '—'}</div>
+          </div>
+          ${(card.recommendation.explainability?.considered_alternatives ?? []).map((item) => `
+            <div class="history-item">
+              <strong>${item.action_name ?? item.action_code}</strong>
+              <div class="muted">${item.state_code} · score ${item.selection_score}</div>
+              <div class="muted">${item.why_not_selected}</div>
+            </div>
+          `).join('')}
+        </div>
       </section>
       <section class="card-section full">
         <p class="panel-kicker">Risk / Evidence</p>

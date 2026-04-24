@@ -95,6 +95,18 @@ export function decideNextAction(opportunityState) {
     .sort((left, right) => right.selection_score - left.selection_score);
 
   const matched = matchedRules[0] ?? null;
+  const consideredAlternatives = matchedRules
+    .slice(1, 4)
+    .map((rule) => {
+      const alternativeAction = getAction(rule.action);
+      return {
+        action_code: alternativeAction?.action_code ?? rule.action,
+        action_name: alternativeAction?.action_name ?? rule.action,
+        state_code: rule.matched_state.state_code,
+        selection_score: rule.selection_score,
+        why_not_selected: `Уступило правилу ${matched?.matched_state.state_code ?? 'default'} по итоговому приоритету выбора.`,
+      };
+    });
 
   const action = getAction(matched?.action ?? 'clarify_specs');
   const escalation = matched?.escalation ? getAction(matched.escalation) : null;
@@ -116,6 +128,7 @@ export function decideNextAction(opportunityState) {
       why_this_action: matched
         ? `${matched.why} Выбор сделан по состоянию ${matched.matched_state.state_code} с confidence ${matched.matched_state.confidence_score}.`
         : 'Базовое действие по умолчанию — дособрать недостающие данные.',
+      considered_alternatives: consideredAlternatives,
       risk_if_ignored: escalation
         ? 'При бездействии рекомендация должна быть эскалирована руководителю.'
         : 'При бездействии окно сделки может остыть или потерять точность.',

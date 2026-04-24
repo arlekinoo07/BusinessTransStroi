@@ -232,7 +232,35 @@ export const opportunityCardSchema = {
         target_role: { type: ['string', 'null'] },
         deadline_at: { type: ['string', 'null'], format: 'date-time' },
         escalation_action_code: { type: ['string', 'null'] },
-        explainability: { type: 'object' },
+        explainability: {
+          type: 'object',
+          properties: {
+            why_important: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            triggered_signals: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            similar_case_hint: { type: ['string', 'null'] },
+            why_this_action: { type: ['string', 'null'] },
+            risk_if_ignored: { type: ['string', 'null'] },
+            considered_alternatives: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  action_code: { type: ['string', 'null'] },
+                  action_name: { type: ['string', 'null'] },
+                  state_code: { type: 'string' },
+                  selection_score: { type: 'number' },
+                  why_not_selected: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
         action_effectiveness: managerQueueItemSchema.properties.action_effectiveness,
       },
     },
