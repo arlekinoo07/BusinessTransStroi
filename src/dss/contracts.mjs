@@ -516,6 +516,23 @@ export const dataQualitySchema = {
         opportunities_without_next_step: { type: 'number' },
         opportunities_missing_equipment: { type: 'number' },
         failed_ingest_events: { type: 'number' },
+        suspicious_ingest_events: { type: 'number' },
+        unresolved_ingest_events: { type: 'number' },
+        normalization_records: { type: 'number' },
+        critical_fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field_code: { type: 'string' },
+              label: { type: 'string' },
+              filled_count: { type: 'number' },
+              filled_percent: { type: 'number' },
+              target_percent: { type: 'number' },
+              status: { type: 'string' },
+            },
+          },
+        },
       },
     },
     items: {

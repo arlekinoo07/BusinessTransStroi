@@ -325,6 +325,18 @@ function renderQualityDashboard(payload) {
       <span class="stat-label">Failed Ingest</span>
       <strong>${summary.failed_ingest_events ?? 0}</strong>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">Suspicious Match</span>
+      <strong>${summary.suspicious_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Unresolved Events</span>
+      <strong>${summary.unresolved_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Normalization Records</span>
+      <strong>${summary.normalization_records ?? 0}</strong>
+    </div>
     ${criticalFields.map((item) => `
       <div class="stat-card">
         <span class="stat-label">${item.label}</span>
