@@ -846,6 +846,9 @@ export async function buildOpportunityCard(opportunityId) {
   const stopSignals = buildStopSignals(opportunity, state, decision);
   const topSimilarCase = similarCases[0] ?? null;
   const similarCaseSources = Array.from(new Set((similarCases ?? []).map((item) => item.source).filter(Boolean)));
+  const similarActionAlignment = topSimilarCase?.recommended_action_hint
+    ? (topSimilarCase.recommended_action_hint === decision.recommended_action?.action_code ? 'aligned' : 'different')
+    : null;
 
   return {
     opportunity_id: opportunity.id,
@@ -874,7 +877,7 @@ export async function buildOpportunityCard(opportunityId) {
       explainability: {
         ...decision.explainability,
         similar_case_hint: topSimilarCase
-          ? `${topSimilarCase.title} · ${topSimilarCase.outcome} · ${topSimilarCase.source}`
+          ? `${topSimilarCase.title} · ${topSimilarCase.outcome} · ${topSimilarCase.source}${topSimilarCase.recommended_action_hint ? ` · action ${topSimilarCase.recommended_action_hint}` : ''}${similarActionAlignment ? ` · ${similarActionAlignment}` : ''}`
           : decision.explainability.similar_case_hint,
       },
       action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,

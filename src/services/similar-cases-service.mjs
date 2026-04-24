@@ -53,6 +53,7 @@ function heuristicSimilarCases(opportunity, opportunities) {
         hint: item.next_step?.description ?? 'Похожий кейс из локального fallback-поиска.',
         score,
         source,
+        recommended_action_hint: item.next_step?.code ?? null,
         match_reasons: matchReasons,
       };
     })
@@ -98,6 +99,7 @@ async function qdrantSimilarCases(opportunity) {
         hint: item.payload?.text?.slice(0, 180) ?? 'Semantic match from Qdrant.',
         score: Number(item.score?.toFixed?.(3) ?? item.score ?? 0),
         source: item.payload?.entity_type ?? collectionName,
+        recommended_action_hint: item.payload?.next_step_code ?? null,
         match_reasons: [
           item.payload?.equipment_type ? 'same_equipment' : null,
           item.payload?.object ? 'same_object' : null,

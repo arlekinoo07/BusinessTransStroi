@@ -126,6 +126,8 @@ function makePayloadBase(opportunity) {
     equipment_type: opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? null,
     commercial_stage: opportunity.commercial_stage ?? null,
     decision_access_status: opportunity.decision_access_status ?? null,
+    next_step_code: opportunity.next_step?.code ?? null,
+    next_step_description: opportunity.next_step?.description ?? null,
   };
 }
 
