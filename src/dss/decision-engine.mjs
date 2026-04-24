@@ -44,6 +44,18 @@ const STATE_TO_ACTION = [
     why: 'Есть доступ к принимающему решение, стоит использовать окно прямого контакта.',
   },
   {
+    state: 'competitor_attack_window',
+    action: 'competitor_attack',
+    escalation: 'owner_escalation',
+    why: 'На объекте есть окно для атаки конкурента, и его лучше не терять.',
+  },
+  {
+    state: 'cross_sell_open',
+    action: 'cross_sell_offer',
+    escalation: null,
+    why: 'По графу виден соседний спрос, есть шанс расширить сделку через кросс-продажу.',
+  },
+  {
     state: 'debt_risk',
     action: 'debt_control',
     escalation: 'owner_escalation',
@@ -74,7 +86,11 @@ export function decideNextAction(opportunityState) {
     explainability: {
       why_important: topStates.map((state) => state.reason),
       triggered_signals: topStates.map((state) => state.state_code),
-      similar_case_hint: 'В v1 это место зарезервировано под поиск похожих кейсов через Qdrant.',
+      similar_case_hint: opportunityState.states.some((state) => state.state_code === 'cross_sell_open')
+        ? 'Граф связей показывает соседний спрос на объекте, это усиливает сценарий расширения.'
+        : opportunityState.states.some((state) => state.state_code === 'competitor_attack_window')
+          ? 'По объекту есть сигнал конкурента, поэтому действие смещается в сторону управленческой атаки.'
+          : 'В v1 это место зарезервировано под поиск похожих кейсов через Qdrant.',
       why_this_action: matched?.why ?? 'Базовое действие по умолчанию — дособрать недостающие данные.',
       risk_if_ignored: escalation
         ? 'При бездействии рекомендация должна быть эскалирована руководителю.'

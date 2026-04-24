@@ -56,6 +56,22 @@ export const ACTION_LIBRARY = [
     requires_approval: false,
   },
   {
+    action_code: 'cross_sell_offer',
+    action_name: 'Предложить соседнюю технику',
+    action_type: 'cross_sell_offer',
+    target_role: 'sales_manager',
+    deadline_sla_minutes: 45,
+    requires_approval: false,
+  },
+  {
+    action_code: 'competitor_attack',
+    action_name: 'Атаковать объект конкурента',
+    action_type: 'competitor_attack',
+    target_role: 'rop',
+    deadline_sla_minutes: 30,
+    requires_approval: true,
+  },
+  {
     action_code: 'owner_escalation',
     action_name: 'Эскалировать на руководителя',
     action_type: 'owner_escalation',
