@@ -322,6 +322,45 @@ async function resolveOpportunityDbId(client, patch) {
     }
   }
 
+  const contextual = await client.query(
+    `
+      SELECT
+        o.id,
+        (
+          CASE WHEN $1::text IS NOT NULL AND c.normalized_name = $1 THEN 3 ELSE 0 END +
+          CASE WHEN $2::text IS NOT NULL AND po.normalized_name = $2 THEN 3 ELSE 0 END +
+          CASE WHEN $3::text IS NOT NULL AND po.address_normalized = $3 THEN 2 ELSE 0 END +
+          CASE WHEN $4::text IS NOT NULL AND et.type_name = $4 THEN 2 ELSE 0 END +
+          CASE WHEN $5::text IS NOT NULL AND p.normalized_name = $5 THEN 2 ELSE 0 END
+        ) AS match_score
+      FROM opportunities o
+      LEFT JOIN companies c ON c.id = o.company_id
+      LEFT JOIN project_objects po ON po.id = o.project_object_id
+      LEFT JOIN equipment_types et ON et.id = o.equipment_type_id
+      LEFT JOIN persons p ON p.id = o.person_id
+      WHERE (
+        CASE WHEN $1::text IS NOT NULL AND c.normalized_name = $1 THEN 3 ELSE 0 END +
+        CASE WHEN $2::text IS NOT NULL AND po.normalized_name = $2 THEN 3 ELSE 0 END +
+        CASE WHEN $3::text IS NOT NULL AND po.address_normalized = $3 THEN 2 ELSE 0 END +
+        CASE WHEN $4::text IS NOT NULL AND et.type_name = $4 THEN 2 ELSE 0 END +
+        CASE WHEN $5::text IS NOT NULL AND p.normalized_name = $5 THEN 2 ELSE 0 END
+      ) >= 4
+      ORDER BY match_score DESC, o.updated_at DESC
+      LIMIT 1
+    `,
+    [
+      patch.company?.normalized_value ?? null,
+      patch.project_object?.normalized_value ?? null,
+      patch.address?.normalized_value ?? null,
+      patch.equipment_type?.normalized_value ?? null,
+      patch.person?.normalized_value ?? null,
+    ],
+  );
+
+  if (contextual.rows[0]?.id) {
+    return contextual.rows[0].id;
+  }
+
   return null;
 }
 

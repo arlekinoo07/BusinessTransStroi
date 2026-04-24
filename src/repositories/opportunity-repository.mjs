@@ -93,22 +93,40 @@ function findOpportunityByPatch(patch) {
   }
 
   const opportunities = Array.from(opportunityStore.values());
+  const scored = opportunities
+    .map((opportunity) => {
+      let score = 0;
 
-  return opportunities.find((opportunity) => {
-    if (patch.company_external_id && opportunity.bitrix_company_id === String(patch.company_external_id)) {
-      return true;
-    }
+      if (patch.company_external_id && opportunity.bitrix_company_id === String(patch.company_external_id)) {
+        score += 5;
+      }
 
-    if (patch.company?.normalized_value && opportunity.company?.normalized_value === patch.company.normalized_value) {
-      return true;
-    }
+      if (patch.company?.normalized_value && opportunity.company?.normalized_value === patch.company.normalized_value) {
+        score += 3;
+      }
 
-    if (patch.project_object?.normalized_value && opportunity.project_object?.normalized_value === patch.project_object.normalized_value) {
-      return true;
-    }
+      if (patch.project_object?.normalized_value && opportunity.project_object?.normalized_value === patch.project_object.normalized_value) {
+        score += 3;
+      }
 
-    return false;
-  }) ?? null;
+      if (patch.address?.normalized_value && opportunity.address?.normalized_value === patch.address.normalized_value) {
+        score += 2;
+      }
+
+      if (patch.equipment_type?.normalized_value && opportunity.equipment_type?.normalized_value === patch.equipment_type.normalized_value) {
+        score += 1.5;
+      }
+
+      if (patch.person?.normalized_value && opportunity.contact_person?.normalized_value === patch.person.normalized_value) {
+        score += 2.5;
+      }
+
+      return { opportunity, score };
+    })
+    .filter((item) => item.score >= 3)
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0]?.opportunity ?? null;
 }
 
 export class InMemoryOpportunityRepository {
