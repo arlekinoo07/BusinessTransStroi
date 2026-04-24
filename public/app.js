@@ -863,10 +863,12 @@ function renderCard(card) {
             Эскалация: card.recommendation.escalation_action_code,
             'Accept rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—',
             'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
+            Support: card.decision_support?.support_level ?? 'minimal',
           })}
         </dl>
         <div class="badge-row">
           ${(card.recommendation_signals?.markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('') || '<span class="badge badge-low">no advanced signals</span>'}
+          ${(card.decision_support?.support_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
         </div>
         <div class="action-row">
           <button class="button button-success" data-feedback="accepted">Принять</button>

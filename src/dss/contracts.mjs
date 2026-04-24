@@ -278,6 +278,19 @@ export const opportunityCardSchema = {
         },
       },
     },
+    decision_support: {
+      type: 'object',
+      properties: {
+        support_level: { type: 'string' },
+        graph_support: { type: 'boolean' },
+        semantic_support: { type: 'boolean' },
+        learning_support: { type: 'boolean' },
+        support_markers: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
     risk_evidence: {
       type: 'object',
       properties: {

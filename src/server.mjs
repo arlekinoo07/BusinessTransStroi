@@ -857,6 +857,19 @@ export async function buildOpportunityCard(opportunityId) {
     ...item,
     action_effectiveness: actionEffectiveness.get(item.action_code ?? '') ?? null,
   }));
+  const decisionSupportMarkers = [
+    ...(opportunity.graph_signals?.cross_sell_open ? ['graph:cross_sell'] : []),
+    ...(opportunity.graph_signals?.competitor_present ? ['graph:competitor'] : []),
+    ...(topSimilarCase ? [`semantic:${topSimilarCase.source ?? 'similar_case'}`] : []),
+    ...(recommendedActionEffectiveness ? ['learning:feedback_history'] : []),
+  ];
+  const decisionSupportLevel = decisionSupportMarkers.length >= 3
+    ? 'high'
+    : decisionSupportMarkers.length >= 2
+      ? 'medium'
+      : decisionSupportMarkers.length >= 1
+        ? 'light'
+        : 'minimal';
 
   return {
     opportunity_id: opportunity.id,
@@ -903,6 +916,13 @@ export async function buildOpportunityCard(opportunityId) {
         ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
         ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
       ],
+    },
+    decision_support: {
+      support_level: decisionSupportLevel,
+      graph_support: Boolean(opportunity.graph_signals?.cross_sell_open || opportunity.graph_signals?.competitor_present),
+      semantic_support: Boolean(topSimilarCase),
+      learning_support: Boolean(recommendedActionEffectiveness),
+      support_markers: decisionSupportMarkers,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
     risk_evidence: riskEvidence,
