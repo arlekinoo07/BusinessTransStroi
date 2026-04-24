@@ -900,10 +900,15 @@ function renderCard(card) {
             <strong>Почему именно это действие</strong>
             <div class="muted">${card.recommendation.explainability?.why_this_action ?? '—'}</div>
           </div>
+          <div class="history-item">
+            <strong>Learning Hint</strong>
+            <div class="muted">${card.recommendation.explainability?.learning_hint ?? '—'}</div>
+          </div>
           ${(card.recommendation.explainability?.considered_alternatives ?? []).map((item) => `
             <div class="history-item">
               <strong>${item.action_name ?? item.action_code}</strong>
               <div class="muted">${item.state_code} · score ${item.selection_score}</div>
+              <div class="muted">accept ${item.action_effectiveness ? `${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—'} · exec ${item.action_effectiveness ? `${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—'}</div>
               <div class="muted">${item.why_not_selected}</div>
             </div>
           `).join('')}

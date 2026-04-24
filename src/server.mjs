@@ -849,6 +849,11 @@ export async function buildOpportunityCard(opportunityId) {
   const similarActionAlignment = topSimilarCase?.recommended_action_hint
     ? (topSimilarCase.recommended_action_hint === decision.recommended_action?.action_code ? 'aligned' : 'different')
     : null;
+  const recommendedActionEffectiveness = actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null;
+  const consideredAlternatives = (decision.explainability?.considered_alternatives ?? []).map((item) => ({
+    ...item,
+    action_effectiveness: actionEffectiveness.get(item.action_code ?? '') ?? null,
+  }));
 
   return {
     opportunity_id: opportunity.id,
@@ -879,6 +884,10 @@ export async function buildOpportunityCard(opportunityId) {
         similar_case_hint: topSimilarCase
           ? `${topSimilarCase.title} · ${topSimilarCase.outcome} · ${topSimilarCase.source}${topSimilarCase.recommended_action_hint ? ` · action ${topSimilarCase.recommended_action_hint}` : ''}${similarActionAlignment ? ` · ${similarActionAlignment}` : ''}`
           : decision.explainability.similar_case_hint,
+        learning_hint: recommendedActionEffectiveness
+          ? `Исторически действие ${decision.recommended_action?.action_code} принимается в ${Math.round((recommendedActionEffectiveness.accepted_rate ?? 0) * 100)}% случаев и исполняется в ${Math.round((recommendedActionEffectiveness.executed_rate ?? 0) * 100)}% случаев.`
+          : 'Пока недостаточно feedback-истории, чтобы оценить эффективность действия.',
+        considered_alternatives: consideredAlternatives,
       },
       action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
     },

@@ -246,6 +246,7 @@ export const opportunityCardSchema = {
             similar_case_hint: { type: ['string', 'null'] },
             why_this_action: { type: ['string', 'null'] },
             risk_if_ignored: { type: ['string', 'null'] },
+            learning_hint: { type: ['string', 'null'] },
             considered_alternatives: {
               type: 'array',
               items: {
@@ -256,6 +257,7 @@ export const opportunityCardSchema = {
                   state_code: { type: 'string' },
                   selection_score: { type: 'number' },
                   why_not_selected: { type: 'string' },
+                  action_effectiveness: managerQueueItemSchema.properties.action_effectiveness,
                 },
               },
             },
