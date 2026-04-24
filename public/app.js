@@ -259,6 +259,18 @@ function renderOwnerDashboard(payload) {
       <span class="stat-label">Executed</span>
       <strong>${summary.recommendation_executed_rate ?? 0}%</strong>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Failed</span>
+      <strong>${summary.ingest_failed_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Suspicious</span>
+      <strong>${summary.ingest_suspicious_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Unresolved</span>
+      <strong>${summary.ingest_unresolved_events ?? 0}</strong>
+    </div>
   `;
 
   if (!items.length) {

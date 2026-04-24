@@ -703,8 +703,11 @@ export async function buildLogisticsDashboard({ limit = 20, mode = '' } = {}) {
 }
 
 export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
-  const feedback = await repository.getFeedbackLearningSummary(50);
-  const opportunities = await repository.listOpportunities();
+  const [feedback, opportunities, ingestIssues] = await Promise.all([
+    repository.getFeedbackLearningSummary(50),
+    repository.listOpportunities(),
+    repository.listFailedIngestEvents(500),
+  ]);
   const items = opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
@@ -770,6 +773,10 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
   const averageMargin = avgMarginSource.length
     ? Number((avgMarginSource.reduce((sum, value) => sum + value, 0) / avgMarginSource.length).toFixed(1))
     : null;
+  const failedIngestCount = ingestIssues.filter((item) => item.processing_status === 'failed').length;
+  const suspiciousIngestCount = ingestIssues.filter((item) => item.processing_status === 'suspicious').length;
+  const unresolvedIngestCount = ingestIssues.filter((item) =>
+    String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
 
   return {
     summary: {
@@ -780,6 +787,9 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
       average_margin_percent: averageMargin,
       recommendation_accepted_rate: Math.round((feedback.summary?.accepted_rate ?? 0) * 100),
       recommendation_executed_rate: Math.round((feedback.summary?.executed_rate ?? 0) * 100),
+      ingest_failed_events: failedIngestCount,
+      ingest_suspicious_events: suspiciousIngestCount,
+      ingest_unresolved_events: unresolvedIngestCount,
     },
     items,
   };
@@ -1028,6 +1038,10 @@ export async function buildDataQualityDashboard() {
   ]);
 
   const totalOpportunities = opportunities.length || 1;
+  const ingestFailedCount = failedIngest.filter((item) => item.processing_status === 'failed').length;
+  const ingestSuspiciousCount = failedIngest.filter((item) => item.processing_status === 'suspicious').length;
+  const ingestUnresolvedCount = failedIngest.filter((item) =>
+    String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
   const linkedEventsCount = opportunities.filter((item) => (item.communication_events ?? []).length > 0).length;
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
@@ -1118,7 +1132,9 @@ export async function buildDataQualityDashboard() {
       normalized_objects_percent: Math.round((normalizedObjectsCount / totalOpportunities) * 100),
       opportunities_without_next_step: withoutNextStep,
       opportunities_missing_equipment: missingEquipment,
-      failed_ingest_events: failedIngest.length,
+      failed_ingest_events: ingestFailedCount,
+      suspicious_ingest_events: ingestSuspiciousCount,
+      unresolved_ingest_events: ingestUnresolvedCount,
       normalization_records: normalizationResults.length,
       critical_fields: coverageMetrics,
     },

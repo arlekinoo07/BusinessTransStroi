@@ -495,6 +495,9 @@ export const ownerDashboardSchema = {
         average_margin_percent: { type: ['number', 'null'] },
         recommendation_accepted_rate: { type: 'number' },
         recommendation_executed_rate: { type: 'number' },
+        ingest_failed_events: { type: 'number' },
+        ingest_suspicious_events: { type: 'number' },
+        ingest_unresolved_events: { type: 'number' },
       },
     },
     items: {
