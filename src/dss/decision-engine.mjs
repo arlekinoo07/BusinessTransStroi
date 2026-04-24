@@ -87,21 +87,42 @@ function getEffectivenessBonus(actionEffectiveness) {
   return Number(((accepted * 4) + (executed * 6)).toFixed(2));
 }
 
+function getExtractionGuardPenalty(opportunityState, actionCode) {
+  const extractionLowConfidence = opportunityState.states.find((state) => state.state_code === 'extraction_low_confidence');
+  if (!extractionLowConfidence) return 0;
+
+  if (['send_offer', 'send_contract', 'reserve_own_equipment', 'cross_sell_offer', 'competitor_attack'].includes(actionCode)) {
+    return 18;
+  }
+  if (['sales_call', 'request_subrent', 'reprice_deal'].includes(actionCode)) {
+    return 8;
+  }
+  if (actionCode === 'clarify_specs') {
+    return -6;
+  }
+
+  return 0;
+}
+
 export function decideNextAction(opportunityState, options = {}) {
   const actionEffectiveness = options.action_effectiveness ?? null;
+  const extractionLowConfidence = opportunityState.states.find((state) => state.state_code === 'extraction_low_confidence');
   const matchedRules = STATE_TO_ACTION
     .map((rule) => {
       const matchedState = opportunityState.states.find((state) => state.state_code === rule.state);
       if (!matchedState) return null;
       const effectiveness = actionEffectiveness?.get?.(rule.action) ?? null;
+      const extractionPenalty = getExtractionGuardPenalty(opportunityState, rule.action);
       return {
         ...rule,
         matched_state: matchedState,
         effectiveness,
+        extraction_penalty: extractionPenalty,
         selection_score: Number((
           rule.priority
           + (matchedState.confidence_score ?? 0) * 10
           + getEffectivenessBonus(effectiveness)
+          - extractionPenalty
         ).toFixed(2)),
       };
     })
@@ -119,7 +140,9 @@ export function decideNextAction(opportunityState, options = {}) {
         state_code: rule.matched_state.state_code,
         selection_score: rule.selection_score,
         action_effectiveness: rule.effectiveness,
-        why_not_selected: `Уступило правилу ${matched?.matched_state.state_code ?? 'default'} по итоговому приоритету выбора.`,
+        why_not_selected: rule.extraction_penalty > 0
+          ? `Уступило из-за защитного штрафа за низкую уверенность в extraction (${rule.extraction_penalty}).`
+          : `Уступило правилу ${matched?.matched_state.state_code ?? 'default'} по итоговому приоритету выбора.`,
       };
     });
 
@@ -141,7 +164,7 @@ export function decideNextAction(opportunityState, options = {}) {
           ? 'По объекту есть сигнал конкурента, поэтому действие смещается в сторону управленческой атаки.'
           : 'В v1 это место зарезервировано под поиск похожих кейсов через Qdrant.',
       why_this_action: matched
-        ? `${matched.why} Выбор сделан по состоянию ${matched.matched_state.state_code} с confidence ${matched.matched_state.confidence_score}${matched.effectiveness ? ` и learning bonus ${getEffectivenessBonus(matched.effectiveness)}.` : '.'}`
+        ? `${matched.why} Выбор сделан по состоянию ${matched.matched_state.state_code} с confidence ${matched.matched_state.confidence_score}${matched.effectiveness ? ` и learning bonus ${getEffectivenessBonus(matched.effectiveness)}` : ''}${matched.extraction_penalty > 0 ? ` при этом учтен extraction guard ${matched.extraction_penalty}.` : extractionLowConfidence ? ' Сработал мягкий confidence guard: система избегает слишком агрессивного действия до верификации ключевых сущностей.' : '.'}`
         : 'Базовое действие по умолчанию — дособрать недостающие данные.',
       considered_alternatives: consideredAlternatives,
       risk_if_ignored: escalation
