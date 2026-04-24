@@ -102,9 +102,10 @@ async function evaluateAndPersistState(opportunity) {
   return state;
 }
 
-async function evaluateAndPersistDecision(opportunity) {
+async function evaluateAndPersistDecision(opportunity, actionEffectiveness = null) {
   const state = await evaluateAndPersistState(opportunity);
-  const decision = decideNextAction(state);
+  const effectivenessMap = actionEffectiveness ?? await getActionEffectivenessMap();
+  const decision = decideNextAction(state, { action_effectiveness: effectivenessMap });
   const persistedDecision = await repository.persistDecisionEvaluation(opportunity, state, decision);
 
   return {
@@ -540,7 +541,7 @@ export async function buildManagerDashboard() {
   return opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
-      const decision = decideNextAction(state);
+      const decision = decideNextAction(state, { action_effectiveness: actionEffectiveness });
       return {
         ...buildQueueItem(opportunity, state, decision),
         action_effectiveness: actionEffectiveness.get(decision.recommended_action?.action_code ?? '') ?? null,
@@ -555,7 +556,7 @@ export async function buildRopDashboard() {
   return opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
-      const decision = decideNextAction(state);
+      const decision = decideNextAction(state, { action_effectiveness: actionEffectiveness });
       const riskEvidence = collectSignalEvidence(opportunity);
       let escalationType = 'monitor';
       let escalationReason = state.states[0]?.reason ?? 'Требует внимания РОПа.';
@@ -662,11 +663,12 @@ function buildDemandClusterHint(opportunity) {
 }
 
 export async function buildLogisticsDashboard({ limit = 20, mode = '' } = {}) {
+  const actionEffectiveness = await getActionEffectivenessMap();
   const opportunities = await repository.listOpportunities();
   const items = opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
-      const decision = decideNextAction(state);
+      const decision = decideNextAction(state, { action_effectiveness: actionEffectiveness });
       return {
         opportunity_id: opportunity.id,
         bitrix_deal_id: opportunity.bitrix_deal_id,
@@ -709,10 +711,11 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
     repository.listOpportunities(),
     repository.listFailedIngestEvents(500),
   ]);
+  const actionEffectiveness = new Map((feedback.action_metrics ?? []).map((item) => [item.action_code, item]));
   const items = opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
-      const decision = decideNextAction(state);
+      const decision = decideNextAction(state, { action_effectiveness: actionEffectiveness });
       const margin = opportunity.economic_assessment?.expected_margin_percent ?? null;
       const ownEquipment = opportunity.economic_assessment?.own_equipment_available ?? null;
       const subrentRequired = opportunity.economic_assessment?.subrent_required ?? null;
@@ -833,7 +836,8 @@ export async function buildOpportunityCard(opportunityId) {
   }
 
   const state = await evaluateAndPersistState(opportunity);
-  const decision = await evaluateAndPersistDecision(opportunity);
+  const actionEffectiveness = await getActionEffectivenessMap();
+  const decision = await evaluateAndPersistDecision(opportunity, actionEffectiveness);
   const stateHistory = await repository.listStateSnapshots(opportunityId);
   const recommendationsHistory = await repository.listRecommendations(opportunityId);
   const feedbackHistory = await repository.listFeedbackForOpportunity(opportunityId);
@@ -842,7 +846,6 @@ export async function buildOpportunityCard(opportunityId) {
   const riskEvidence = collectSignalEvidence(opportunity);
   const extractionQuality = buildExtractionQuality(opportunity);
   const decisionTimeline = buildDecisionTimeline(stateHistory, recommendationsHistory, feedbackHistory);
-  const actionEffectiveness = await getActionEffectivenessMap();
   const stopSignals = buildStopSignals(opportunity, state, decision);
   const topSimilarCase = similarCases[0] ?? null;
   const similarCaseSources = Array.from(new Set((similarCases ?? []).map((item) => item.source).filter(Boolean)));

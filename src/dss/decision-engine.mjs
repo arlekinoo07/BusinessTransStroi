@@ -80,15 +80,29 @@ const STATE_TO_ACTION = [
   },
 ];
 
-export function decideNextAction(opportunityState) {
+function getEffectivenessBonus(actionEffectiveness) {
+  if (!actionEffectiveness) return 0;
+  const accepted = actionEffectiveness.accepted_rate ?? 0;
+  const executed = actionEffectiveness.executed_rate ?? 0;
+  return Number(((accepted * 4) + (executed * 6)).toFixed(2));
+}
+
+export function decideNextAction(opportunityState, options = {}) {
+  const actionEffectiveness = options.action_effectiveness ?? null;
   const matchedRules = STATE_TO_ACTION
     .map((rule) => {
       const matchedState = opportunityState.states.find((state) => state.state_code === rule.state);
       if (!matchedState) return null;
+      const effectiveness = actionEffectiveness?.get?.(rule.action) ?? null;
       return {
         ...rule,
         matched_state: matchedState,
-        selection_score: Number((rule.priority + (matchedState.confidence_score ?? 0) * 10).toFixed(2)),
+        effectiveness,
+        selection_score: Number((
+          rule.priority
+          + (matchedState.confidence_score ?? 0) * 10
+          + getEffectivenessBonus(effectiveness)
+        ).toFixed(2)),
       };
     })
     .filter(Boolean)
@@ -104,6 +118,7 @@ export function decideNextAction(opportunityState) {
         action_name: alternativeAction?.action_name ?? rule.action,
         state_code: rule.matched_state.state_code,
         selection_score: rule.selection_score,
+        action_effectiveness: rule.effectiveness,
         why_not_selected: `Уступило правилу ${matched?.matched_state.state_code ?? 'default'} по итоговому приоритету выбора.`,
       };
     });
@@ -126,7 +141,7 @@ export function decideNextAction(opportunityState) {
           ? 'По объекту есть сигнал конкурента, поэтому действие смещается в сторону управленческой атаки.'
           : 'В v1 это место зарезервировано под поиск похожих кейсов через Qdrant.',
       why_this_action: matched
-        ? `${matched.why} Выбор сделан по состоянию ${matched.matched_state.state_code} с confidence ${matched.matched_state.confidence_score}.`
+        ? `${matched.why} Выбор сделан по состоянию ${matched.matched_state.state_code} с confidence ${matched.matched_state.confidence_score}${matched.effectiveness ? ` и learning bonus ${getEffectivenessBonus(matched.effectiveness)}.` : '.'}`
         : 'Базовое действие по умолчанию — дособрать недостающие данные.',
       considered_alternatives: consideredAlternatives,
       risk_if_ignored: escalation
