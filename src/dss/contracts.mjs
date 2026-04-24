@@ -562,6 +562,10 @@ export const dataQualitySchema = {
             type: 'array',
             items: { type: 'string' },
           },
+          ingest_issues: {
+            type: 'array',
+            items: { type: 'string' },
+          },
         },
       },
     },

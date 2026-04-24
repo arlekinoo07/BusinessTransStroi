@@ -392,6 +392,7 @@ function renderQualityDashboard(payload) {
         ${item.issues.map((issue) => `<span class="badge badge-low">${issue}</span>`).join('')}
         ${(item.extraction_confidence?.low_confidence_fields ?? []).map((field) => `<span class="badge badge-critical">${field} low confidence</span>`).join('')}
       </div>
+      ${(item.ingest_issues?.length ?? 0) > 0 ? `<div class="muted">Ingest risk: ${item.ingest_issues.join(', ')}</div>` : ''}
     </article>
   `).join('');
 

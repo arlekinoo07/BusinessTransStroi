@@ -9,6 +9,7 @@ import { adaptBitrixWebhookPayload } from './bitrix-webhook-adapter.mjs';
 import { decideNextAction } from './dss/decision-engine.mjs';
 import { extractEntitiesFromText } from './dss/nlp-extraction.mjs';
 import { findContextualDuplicateCandidates, findDuplicateCandidates } from './dss/normalization.mjs';
+import { buildBitrixEntityPatch } from './services/bitrix-ingest-service.mjs';
 import { requirePermission, resolveAuthContext } from './services/auth-permissions-service.mjs';
 import {
   getNeo4jStatus,
@@ -1030,6 +1031,36 @@ function buildQualityIssues(opportunity) {
   return issues;
 }
 
+function buildIngestIssueMap(ingestEvents) {
+  const byOpportunity = new Map();
+
+  for (const event of ingestEvents) {
+    try {
+      const patch = buildBitrixEntityPatch(event.payload);
+      const opportunityId = patch.kind === 'deal'
+        ? String(patch.external_id)
+        : (patch.opportunity_external_id ? String(patch.opportunity_external_id) : null);
+      if (!opportunityId) continue;
+
+      const issues = byOpportunity.get(opportunityId) ?? [];
+      if (event.processing_status === 'suspicious') {
+        issues.push('suspicious_ingest_match');
+      }
+      if (event.processing_status === 'failed') {
+        issues.push('failed_ingest_event');
+      }
+      if (String(event.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')) {
+        issues.push('unresolved_ingest_event');
+      }
+      byOpportunity.set(opportunityId, Array.from(new Set(issues)));
+    } catch {
+      continue;
+    }
+  }
+
+  return byOpportunity;
+}
+
 export async function buildDataQualityDashboard() {
   const [opportunities, failedIngest, normalizationResults] = await Promise.all([
     repository.listOpportunities(),
@@ -1042,6 +1073,7 @@ export async function buildDataQualityDashboard() {
   const ingestSuspiciousCount = failedIngest.filter((item) => item.processing_status === 'suspicious').length;
   const ingestUnresolvedCount = failedIngest.filter((item) =>
     String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
+  const ingestIssueMap = buildIngestIssueMap(failedIngest);
   const linkedEventsCount = opportunities.filter((item) => (item.communication_events ?? []).length > 0).length;
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
@@ -1112,13 +1144,15 @@ export async function buildDataQualityDashboard() {
 
   const items = opportunities
     .map((opportunity) => {
-      const issues = buildQualityIssues(opportunity);
+      const ingestIssues = ingestIssueMap.get(String(opportunity.id)) ?? [];
+      const issues = [...buildQualityIssues(opportunity), ...ingestIssues];
       return {
         opportunity_id: opportunity.id,
         company: opportunity.company?.raw_value ?? null,
         object: opportunity.project_object?.raw_value ?? null,
         quality_score: Math.max(0, 100 - (issues.length * 18)),
         issues,
+        ingest_issues: ingestIssues,
         extraction_confidence: buildExtractionQuality(opportunity),
       };
     })
