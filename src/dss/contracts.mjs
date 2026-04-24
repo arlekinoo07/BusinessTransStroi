@@ -537,6 +537,16 @@ export const dataQualitySchema = {
             },
           },
         },
+        issue_breakdown: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              issue_code: { type: 'string' },
+              count: { type: 'number' },
+            },
+          },
+        },
       },
     },
     items: {

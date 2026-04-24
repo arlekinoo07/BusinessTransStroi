@@ -312,6 +312,7 @@ function renderOwnerDashboard(payload) {
 function renderQualityDashboard(payload) {
   const summary = payload.summary ?? {};
   const criticalFields = summary.critical_fields ?? [];
+  const issueBreakdown = summary.issue_breakdown ?? [];
   els.qualitySummary.innerHTML = `
     <div class="stat-card">
       <span class="stat-label">Opportunities</span>
@@ -377,13 +378,28 @@ function renderQualityDashboard(payload) {
       </article>
     `
     : '';
+  const issueBreakdownHtml = issueBreakdown.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Топ проблем качества</h3>
+            <div class="queue-subtitle">Какие issue чаще всего бьют по opportunity</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${issueBreakdown.slice(0, 10).map((item) => `<span class="badge badge-critical">${item.issue_code}: ${item.count}</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
 
   if (!items.length) {
-    els.qualityList.innerHTML = `${criticalFieldsHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
+    els.qualityList.innerHTML = `${criticalFieldsHtml}${issueBreakdownHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
     return;
   }
 
-  els.qualityList.innerHTML = criticalFieldsHtml + items.slice(0, 8).map((item) => `
+  els.qualityList.innerHTML = criticalFieldsHtml + issueBreakdownHtml + items.slice(0, 8).map((item) => `
     <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
       <div class="queue-top">
         <div>

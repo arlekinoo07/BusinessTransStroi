@@ -1159,6 +1159,16 @@ export async function buildDataQualityDashboard() {
     })
     .filter((item) => item.issues.length > 0)
     .sort((left, right) => left.quality_score - right.quality_score);
+  const issueBreakdown = Array.from(
+    items.reduce((accumulator, item) => {
+      for (const issue of item.issues) {
+        accumulator.set(issue, (accumulator.get(issue) ?? 0) + 1);
+      }
+      return accumulator;
+    }, new Map()).entries(),
+  )
+    .map(([issue_code, count]) => ({ issue_code, count }))
+    .sort((left, right) => right.count - left.count);
 
   return {
     summary: {
@@ -1173,6 +1183,7 @@ export async function buildDataQualityDashboard() {
       opportunities_with_ingest_risk: opportunitiesWithIngestRisk,
       normalization_records: normalizationResults.length,
       critical_fields: coverageMetrics,
+      issue_breakdown: issueBreakdown,
     },
     items,
   };
