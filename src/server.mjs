@@ -1353,17 +1353,24 @@ export function createAppServer() {
         if (denied) return sendJson(response, 403, denied);
         const payload = await readJson(request).catch(() => ({}));
         const limit = Number(payload?.limit ?? 50);
+        const processAfterRetry = payload?.process_after_retry === true;
         const statuses = Array.isArray(payload?.statuses) && payload.statuses.length
           ? payload.statuses
           : ['failed', 'suspicious'];
         const result = await repository.retryIngestEvents({ statuses, limit });
+        const processed = processAfterRetry
+          ? await repository.processPendingIngestEvents(limit)
+          : null;
         await writeAuditLog(auth, 'bitrix_ingest_retry', 'ingest_batch', `retry:${Date.now()}`, {
           retried_count: result.retried_count,
           statuses,
+          process_after_retry: processAfterRetry,
+          processed_count: processed?.processed_count ?? 0,
         });
         return sendJson(response, 200, {
           ok: true,
           ...result,
+          processed,
         });
       }
 

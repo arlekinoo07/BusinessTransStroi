@@ -431,6 +431,7 @@ export class InMemoryOpportunityRepository {
       if (!normalizedStatuses.has(event.processing_status)) continue;
       event.processing_status = 'pending';
       event.error_message = null;
+      event.retry_count = (event.retry_count ?? 0) + 1;
       event.updated_at = new Date().toISOString();
       retried.push(clone(event));
     }

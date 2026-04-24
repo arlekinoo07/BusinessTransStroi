@@ -1057,10 +1057,10 @@ async function loadIngestMonitor() {
   ]);
 
   renderSimpleList(els.pendingList, pending.items, (item) =>
-    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status}</div>`,
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0}</div>`,
   );
   renderSimpleList(els.errorList, errors.items, (item) =>
-    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · ${item.error_message ?? 'Без сообщения'}</div>`,
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0} · ${item.error_message ?? 'Без сообщения'}</div>`,
   );
 
   return { pending: pending.items, errors: errors.items };
@@ -1183,6 +1183,7 @@ els.retryIngestButton.addEventListener('click', async () => {
     body: JSON.stringify({
       statuses: ['failed', 'suspicious'],
       limit: 100,
+      process_after_retry: true,
     }),
   });
   await refreshAll();

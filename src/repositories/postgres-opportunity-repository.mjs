@@ -1509,6 +1509,7 @@ export class PostgresOpportunityRepository {
         SET
           processing_status = 'pending',
           error_message = NULL,
+          retry_count = retry_count + 1,
           updated_at = NOW()
         FROM picked
         WHERE ie.id = picked.id
