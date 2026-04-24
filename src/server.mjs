@@ -213,6 +213,9 @@ function collectBlockingReasons(opportunity, state) {
   if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
     blockingReasons.push('Сделка зависит от субаренды.');
   }
+  if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
+    blockingReasons.push('Низкая уверенность в объекте или технике, нужна ручная верификация.');
+  }
 
   return blockingReasons;
 }
@@ -229,6 +232,9 @@ function collectLowPriorityReasons(opportunity, state) {
   }
   if (!opportunity.next_step?.code && !opportunity.next_step?.description) {
     lowPriorityReasons.push('Не зафиксирован следующий шаг.');
+  }
+  if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
+    lowPriorityReasons.push('Сделку пока рано агрессивно атаковать: ключевые сущности распознаны неуверенно.');
   }
 
   return lowPriorityReasons;
@@ -261,6 +267,9 @@ function buildStopSignals(opportunity, state, decision) {
   }
   if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
     waitConditions.push('Сначала понять, доступна ли субаренда и укладывается ли она в маржу.');
+  }
+  if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
+    waitConditions.push('Сначала вручную подтвердить объект, технику и базовые условия запроса.');
   }
   if (!waitConditions.length && decision.recommended_action?.action_code === 'stop_deal') {
     waitConditions.push('Сейчас лучше не тратить ресурс команды, пока не появится предметность.');
