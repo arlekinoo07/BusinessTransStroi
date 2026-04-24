@@ -864,10 +864,12 @@ function renderCard(card) {
             'Accept rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—',
             'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
             Support: card.decision_support?.support_level ?? 'minimal',
+            Guard: card.decision_support?.confidence_guard ? 'confidence guard active' : '—',
           })}
         </dl>
         <div class="badge-row">
           ${(card.recommendation_signals?.markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('') || '<span class="badge badge-low">no advanced signals</span>'}
+          ${card.decision_support?.confidence_guard ? '<span class="badge badge-low">confidence guard</span>' : ''}
           ${(card.decision_support?.support_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
         </div>
         <div class="action-row">

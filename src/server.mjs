@@ -316,6 +316,9 @@ function buildQueueItem(opportunity, state, decision) {
   if (state.states.some((item) => item.state_code === 'spec_strong')) {
     signalMarkers.push('spec strong');
   }
+  if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
+    signalMarkers.push('verify extraction');
+  }
 
   return {
     opportunity_id: opportunity.id,
@@ -920,10 +923,12 @@ export async function buildOpportunityCard(opportunityId) {
       contract_ready: state.states.some((item) => item.state_code === 'client_ready_for_contract'),
       decision_access: state.states.some((item) => item.state_code === 'decision_maker_reached'),
       spec_strong: state.states.some((item) => item.state_code === 'spec_strong'),
+      confidence_guard: state.states.some((item) => item.state_code === 'extraction_low_confidence'),
       markers: [
         ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
         ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
         ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
+        ...(state.states.some((item) => item.state_code === 'extraction_low_confidence') ? ['verify extraction'] : []),
       ],
     },
     decision_support: {
@@ -931,6 +936,7 @@ export async function buildOpportunityCard(opportunityId) {
       graph_support: Boolean(opportunity.graph_signals?.cross_sell_open || opportunity.graph_signals?.competitor_present),
       semantic_support: Boolean(topSimilarCase),
       learning_support: Boolean(recommendedActionEffectiveness),
+      confidence_guard: state.states.some((item) => item.state_code === 'extraction_low_confidence'),
       support_markers: decisionSupportMarkers,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),

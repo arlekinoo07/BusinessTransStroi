@@ -272,6 +272,7 @@ export const opportunityCardSchema = {
         contract_ready: { type: 'boolean' },
         decision_access: { type: 'boolean' },
         spec_strong: { type: 'boolean' },
+        confidence_guard: { type: 'boolean' },
         markers: {
           type: 'array',
           items: { type: 'string' },
@@ -285,6 +286,7 @@ export const opportunityCardSchema = {
         graph_support: { type: 'boolean' },
         semantic_support: { type: 'boolean' },
         learning_support: { type: 'boolean' },
+        confidence_guard: { type: 'boolean' },
         support_markers: {
           type: 'array',
           items: { type: 'string' },
