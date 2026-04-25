@@ -1251,7 +1251,7 @@ export async function buildDataQualityDashboard() {
   };
 }
 
-export async function buildNormalizationDashboard() {
+export async function buildNormalizationDashboard({ action = '' } = {}) {
   const opportunities = await repository.listOpportunities();
 
   const companies = opportunities
@@ -1331,6 +1331,10 @@ export async function buildNormalizationDashboard() {
     }))
     .filter((item) => item.count > 0);
 
+  const filteredCandidates = action
+    ? candidates.filter((item) => item.merge_priority === action)
+    : candidates;
+
   return {
     summary: {
       companies_seen: companies.length,
@@ -1339,7 +1343,7 @@ export async function buildNormalizationDashboard() {
       duplicate_candidates: candidates.length,
       priority_breakdown: priorityBreakdown,
     },
-    items: candidates,
+    items: filteredCandidates,
   };
 }
 
@@ -1599,7 +1603,9 @@ export function createAppServer() {
       if (request.method === 'GET' && url.pathname === '/dashboard/normalization') {
         const denied = requirePermission(auth, 'dashboard.normalization');
         if (denied) return sendJson(response, 403, denied);
-        return sendJson(response, 200, await buildNormalizationDashboard());
+        return sendJson(response, 200, await buildNormalizationDashboard({
+          action: url.searchParams.get('action') ?? '',
+        }));
       }
 
       if (request.method === 'GET' && url.pathname === '/dashboard/feedback-learning') {

@@ -21,6 +21,7 @@ const els = {
   qualityList: document.querySelector('#qualityList'),
   normalizationSummary: document.querySelector('#normalizationSummary'),
   normalizationList: document.querySelector('#normalizationList'),
+  normalizationAction: document.querySelector('#normalizationAction'),
   feedbackLearningSummary: document.querySelector('#feedbackLearningSummary'),
   feedbackLearningList: document.querySelector('#feedbackLearningList'),
   feedbackRecentList: document.querySelector('#feedbackRecentList'),
@@ -1111,7 +1112,9 @@ async function loadDataQuality() {
 }
 
 async function loadNormalizationDashboard() {
-  const payload = await api('/dashboard/normalization');
+  const params = new URLSearchParams();
+  if (els.normalizationAction.value) params.set('action', els.normalizationAction.value);
+  const payload = await api(`/dashboard/normalization${params.toString() ? `?${params.toString()}` : ''}`);
   renderNormalizationDashboard(payload);
   return payload;
 }
@@ -1191,6 +1194,7 @@ els.queueBucket.addEventListener('change', refreshAll);
 els.queueState.addEventListener('change', refreshAll);
 els.queueMode.addEventListener('change', refreshAll);
 els.ropType.addEventListener('change', refreshAll);
+els.normalizationAction.addEventListener('change', refreshAll);
 els.logisticsMode.addEventListener('change', refreshAll);
 els.ownerStrategy.addEventListener('change', refreshAll);
 els.userRole.addEventListener('change', refreshAll);

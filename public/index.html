@@ -172,6 +172,17 @@
               <p class="panel-kicker">Normalization</p>
               <h2>Кандидаты на дубли и склейку</h2>
             </div>
+            <div class="queue-controls">
+              <label class="limit-control">
+                <span>Action</span>
+                <select id="normalizationAction">
+                  <option value="">Все</option>
+                  <option value="merge_now">merge_now</option>
+                  <option value="review_fast">review_fast</option>
+                  <option value="review">review</option>
+                </select>
+              </label>
+            </div>
           </div>
           <div id="normalizationSummary" class="hero-stats"></div>
           <div id="normalizationList" class="queue-list"></div>
