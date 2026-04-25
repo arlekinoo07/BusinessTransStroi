@@ -824,6 +824,7 @@ export async function buildManagerQueue({ limit = 20, bucket = '', state = '', m
     .filter((item) => !state || item.state_codes.includes(state))
     .filter((item) => {
       if (!mode) return true;
+      if (mode === 'verify') return item.state_codes.includes('extraction_low_confidence');
       if (mode === 'blocked') return (item.why_blocked?.length ?? 0) > 0;
       if (mode === 'low_priority') return (item.why_low_priority?.length ?? 0) > 0;
       if (mode === 'overdue') {

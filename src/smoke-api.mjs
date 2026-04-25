@@ -21,6 +21,7 @@ async function main() {
   const managerDashboard = await buildManagerDashboard();
   const managerQueue = await buildManagerQueue({ limit: 5 });
   const managerAttackNow = await buildManagerQueue({ limit: 5, mode: 'attack_now' });
+  const managerVerify = await buildManagerQueue({ limit: 5, mode: 'verify' });
   const managerOverdue = await buildManagerQueue({ limit: 5, mode: 'overdue' });
   const managerBlocked = await buildManagerQueue({ limit: 5, mode: 'blocked' });
   const managerLowPriority = await buildManagerQueue({ limit: 5, mode: 'low_priority' });
@@ -63,6 +64,7 @@ async function main() {
     target_opportunity_id: targetOpportunityId,
     manager_queue_items: managerQueue.length,
     manager_attack_now_items: managerAttackNow.length,
+    manager_verify_items: managerVerify.length,
     manager_overdue_items: managerOverdue.length,
     manager_blocked_items: managerBlocked.length,
     manager_low_priority_items: managerLowPriority.length,
