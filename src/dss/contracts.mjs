@@ -568,6 +568,7 @@ export const dataQualitySchema = {
         suspicious_ingest_events: { type: 'number' },
         unresolved_ingest_events: { type: 'number' },
         opportunities_with_ingest_risk: { type: 'number' },
+        confidence_guard_events: { type: 'number' },
         normalization_records: { type: 'number' },
         critical_fields: {
           type: 'array',

@@ -1083,6 +1083,9 @@ function buildQualityIssues(opportunity) {
   if (extractionQuality.low_confidence_fields.includes('object')) issues.push('object_low_confidence');
   if (extractionQuality.low_confidence_fields.includes('equipment')) issues.push('equipment_low_confidence');
   if (extractionQuality.low_confidence_fields.includes('person')) issues.push('person_low_confidence');
+  if (evaluateOpportunityState(opportunity).states.some((item) => item.state_code === 'extraction_low_confidence')) {
+    issues.push('confidence_guard_active');
+  }
   return issues;
 }
 
@@ -1130,6 +1133,8 @@ export async function buildDataQualityDashboard() {
     String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
   const ingestIssueMap = buildIngestIssueMap(failedIngest);
   const opportunitiesWithIngestRisk = ingestIssueMap.size;
+  const opportunitiesWithConfidenceGuard = opportunities.filter((item) =>
+    evaluateOpportunityState(item).states.some((state) => state.state_code === 'extraction_low_confidence')).length;
   const linkedEventsCount = opportunities.filter((item) => (item.communication_events ?? []).length > 0).length;
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
@@ -1236,6 +1241,7 @@ export async function buildDataQualityDashboard() {
       suspicious_ingest_events: ingestSuspiciousCount,
       unresolved_ingest_events: ingestUnresolvedCount,
       opportunities_with_ingest_risk: opportunitiesWithIngestRisk,
+      confidence_guard_events: opportunitiesWithConfidenceGuard,
       normalization_records: normalizationResults.length,
       critical_fields: coverageMetrics,
       issue_breakdown: issueBreakdown,
