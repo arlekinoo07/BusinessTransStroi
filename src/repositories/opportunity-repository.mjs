@@ -124,6 +124,7 @@ function findOpportunityByPatch(patch) {
   const scored = opportunities
     .map((opportunity) => {
       let score = 0;
+      const aliasMatches = [];
 
       if (patch.company_external_id && opportunity.bitrix_company_id === String(patch.company_external_id)) {
         score += 5;
@@ -133,12 +134,14 @@ function findOpportunityByPatch(patch) {
         score += 3;
       } else if (matchesAcceptedAlias('company', patch.company?.normalized_value, opportunity.company?.normalized_value)) {
         score += 2.5;
+        aliasMatches.push('company');
       }
 
       if (patch.project_object?.normalized_value && opportunity.project_object?.normalized_value === patch.project_object.normalized_value) {
         score += 3;
       } else if (matchesAcceptedAlias('object', patch.project_object?.normalized_value, opportunity.project_object?.normalized_value)) {
         score += 2.5;
+        aliasMatches.push('object');
       }
 
       if (patch.address?.normalized_value && opportunity.address?.normalized_value === patch.address.normalized_value) {
@@ -153,11 +156,13 @@ function findOpportunityByPatch(patch) {
         score += 2.5;
       } else if (matchesAcceptedAlias('person', patch.person?.normalized_value, opportunity.contact_person?.normalized_value)) {
         score += 2;
+        aliasMatches.push('person');
       }
 
       return {
         opportunity,
         score,
+        alias_matches: aliasMatches,
       };
     })
     .filter((item) => item.score >= 3)
@@ -170,6 +175,7 @@ function findOpportunityByPatch(patch) {
     match_type: 'contextual',
     match_score: best.score,
     suspicious: best.score < 5,
+    alias_matches: best.alias_matches ?? [],
   };
 }
 
@@ -617,8 +623,13 @@ export class InMemoryOpportunityRepository {
       }
 
       const suspicious = patch.kind === 'communication_event' && findOpportunityByPatch(patch)?.suspicious === true;
+      const aliasMatches = patch.kind === 'communication_event' ? (findOpportunityByPatch(patch)?.alias_matches ?? []) : [];
       event.processing_status = suspicious ? 'suspicious' : 'processed';
-      event.error_message = suspicious ? 'Suspicious contextual match during ingest resolution' : null;
+      event.error_message = suspicious
+        ? `Suspicious contextual match during ingest resolution${aliasMatches.length ? ` (accepted normalization alias: ${aliasMatches.join(', ')})` : ''}`
+        : aliasMatches.length
+          ? `Accepted normalization alias used: ${aliasMatches.join(', ')}`
+          : null;
       event.updated_at = new Date().toISOString();
       processed.push({
         ingest_event_id: event.id,

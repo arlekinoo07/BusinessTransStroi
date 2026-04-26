@@ -432,16 +432,22 @@ async function resolveOpportunityDbId(client, patch) {
 
   if (contextual.rows[0]?.id) {
     const matchScore = Number(contextual.rows[0].match_score ?? 0);
+    const aliasMatches = [
+      ...(matchAcceptedAlias(acceptedAliases, 'company', patch.company?.normalized_value, contextual.rows[0].company_normalized_value) ? ['company'] : []),
+      ...(matchAcceptedAlias(acceptedAliases, 'object', patch.project_object?.normalized_value, contextual.rows[0].project_object_normalized_value) ? ['object'] : []),
+      ...(matchAcceptedAlias(acceptedAliases, 'person', patch.person?.normalized_value, contextual.rows[0].person_normalized_value) ? ['person'] : []),
+    ];
     const aliasBonus =
-      (matchAcceptedAlias(acceptedAliases, 'company', patch.company?.normalized_value, contextual.rows[0].company_normalized_value) ? 0.2 : 0)
-      + (matchAcceptedAlias(acceptedAliases, 'object', patch.project_object?.normalized_value, contextual.rows[0].project_object_normalized_value) ? 0.2 : 0)
-      + (matchAcceptedAlias(acceptedAliases, 'person', patch.person?.normalized_value, contextual.rows[0].person_normalized_value) ? 0.15 : 0);
+      (aliasMatches.includes('company') ? 0.2 : 0)
+      + (aliasMatches.includes('object') ? 0.2 : 0)
+      + (aliasMatches.includes('person') ? 0.15 : 0);
     const boostedScore = matchScore + aliasBonus;
     return {
       id: contextual.rows[0].id,
       match_type: 'contextual',
       match_score: boostedScore,
       suspicious: boostedScore < 5,
+      alias_matches: aliasMatches,
     };
   }
 
@@ -1653,8 +1659,10 @@ export class PostgresOpportunityRepository {
             ingestEvent.id,
             suspicious ? 'suspicious' : 'processed',
             suspicious
-              ? `Suspicious ${result.match_diagnostics.match_type} match (score=${result.match_diagnostics.match_score})`
-              : null,
+              ? `Suspicious ${result.match_diagnostics.match_type} match (score=${result.match_diagnostics.match_score})${(result.match_diagnostics.alias_matches ?? []).length ? ` · accepted normalization alias: ${(result.match_diagnostics.alias_matches ?? []).join(', ')}` : ''}`
+              : (result.match_diagnostics.alias_matches ?? []).length
+                ? `Accepted normalization alias used: ${(result.match_diagnostics.alias_matches ?? []).join(', ')}`
+                : null,
           ],
         );
 
