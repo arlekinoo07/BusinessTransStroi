@@ -437,6 +437,7 @@ function renderQualityDashboard(payload) {
 function renderNormalizationDashboard(payload) {
   const summary = payload.summary ?? {};
   const priorityBreakdown = summary.priority_breakdown ?? [];
+  const decisionBreakdown = summary.decision_breakdown ?? [];
   els.normalizationSummary.innerHTML = `
     <div class="stat-card">
       <span class="stat-label">Companies</span>
@@ -457,6 +458,12 @@ function renderNormalizationDashboard(payload) {
     ${priorityBreakdown.map((item) => `
       <div class="stat-card">
         <span class="stat-label">${item.priority_code}</span>
+        <strong>${item.count}</strong>
+      </div>
+    `).join('')}
+    ${decisionBreakdown.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.decision_status}</span>
         <strong>${item.count}</strong>
       </div>
     `).join('')}

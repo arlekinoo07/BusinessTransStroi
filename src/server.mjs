@@ -1344,6 +1344,12 @@ export async function buildNormalizationDashboard({ action = '' } = {}) {
     .filter((item) => item.count > 0);
 
   const unresolvedCandidates = candidatesWithDecisions.filter((item) => !item.decision);
+  const decisionBreakdown = ['accepted', 'review_later', 'ignored']
+    .map((decision_status) => ({
+      decision_status,
+      count: candidatesWithDecisions.filter((item) => item.decision?.decision_status === decision_status).length,
+    }))
+    .filter((item) => item.count > 0);
   const filteredCandidates = action
     ? unresolvedCandidates.filter((item) => item.merge_priority === action)
     : unresolvedCandidates;
@@ -1355,6 +1361,7 @@ export async function buildNormalizationDashboard({ action = '' } = {}) {
       persons_seen: persons.length,
       duplicate_candidates: unresolvedCandidates.length,
       priority_breakdown: priorityBreakdown,
+      decision_breakdown: decisionBreakdown,
     },
     items: filteredCandidates,
   };
