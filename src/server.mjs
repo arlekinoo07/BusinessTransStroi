@@ -1111,6 +1111,9 @@ function buildIngestIssueMap(ingestEvents) {
       if (String(event.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')) {
         issues.push('unresolved_ingest_event');
       }
+      if (String(event.error_message ?? '').toLowerCase().includes('accepted normalization alias')) {
+        issues.push('alias_assisted_match');
+      }
       byOpportunity.set(opportunityId, Array.from(new Set(issues)));
     } catch {
       continue;
@@ -1132,6 +1135,8 @@ export async function buildDataQualityDashboard() {
   const ingestSuspiciousCount = failedIngest.filter((item) => item.processing_status === 'suspicious').length;
   const ingestUnresolvedCount = failedIngest.filter((item) =>
     String(item.error_message ?? '').toLowerCase().includes('unable to resolve opportunity')).length;
+  const ingestAliasAssistedCount = failedIngest.filter((item) =>
+    String(item.error_message ?? '').toLowerCase().includes('accepted normalization alias')).length;
   const ingestIssueMap = buildIngestIssueMap(failedIngest);
   const opportunitiesWithIngestRisk = ingestIssueMap.size;
   const opportunitiesWithConfidenceGuard = opportunities.filter((item) =>
@@ -1241,6 +1246,7 @@ export async function buildDataQualityDashboard() {
       failed_ingest_events: ingestFailedCount,
       suspicious_ingest_events: ingestSuspiciousCount,
       unresolved_ingest_events: ingestUnresolvedCount,
+      alias_assisted_ingest_events: ingestAliasAssistedCount,
       opportunities_with_ingest_risk: opportunitiesWithIngestRisk,
       confidence_guard_events: opportunitiesWithConfidenceGuard,
       normalization_records: normalizationResults.length,

@@ -353,6 +353,10 @@ function renderQualityDashboard(payload) {
       <strong>${summary.unresolved_ingest_events ?? 0}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Alias-Assisted</span>
+      <strong>${summary.alias_assisted_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Opportunities At Risk</span>
       <strong>${summary.opportunities_with_ingest_risk ?? 0}</strong>
     </div>
@@ -1119,7 +1123,7 @@ async function loadIngestMonitor() {
     `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0}</div>`,
   );
   renderSimpleList(els.errorList, errors.items, (item) =>
-    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0} · ${item.error_message ?? 'Без сообщения'}</div>`,
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0} · ${item.error_message ?? 'Без сообщения'}</div>${String(item.error_message ?? '').toLowerCase().includes('accepted normalization alias') ? '<div class="badge-row"><span class="badge badge-low">alias-assisted</span></div>' : ''}`,
   );
 
   return { pending: pending.items, errors: errors.items };
