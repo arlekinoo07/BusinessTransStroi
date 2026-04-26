@@ -88,6 +88,33 @@ function currentIsoTime() {
   return new Date().toISOString();
 }
 
+function parseAcceptedNormalizationAliases() {
+  const aliases = [];
+  for (const item of normalizationDecisionStore.values()) {
+    if (item.decision_status !== 'accepted') continue;
+    const [entity_kind, left_label, right_label] = String(item.candidate_key ?? '').split('::');
+    if (!entity_kind || !left_label || !right_label) continue;
+    aliases.push({
+      entity_kind,
+      left_label,
+      right_label,
+    });
+  }
+  return aliases;
+}
+
+function matchesAcceptedAlias(entityKind, leftValue, rightValue) {
+  if (!leftValue || !rightValue) return false;
+  const normalizedLeft = String(leftValue).toLowerCase();
+  const normalizedRight = String(rightValue).toLowerCase();
+  return parseAcceptedNormalizationAliases().some((item) =>
+    item.entity_kind === entityKind
+    && (
+      (item.left_label === normalizedLeft && item.right_label === normalizedRight)
+      || (item.left_label === normalizedRight && item.right_label === normalizedLeft)
+    ));
+}
+
 function findOpportunityByPatch(patch) {
   if (patch.opportunity_external_id && opportunityStore.has(String(patch.opportunity_external_id))) {
     return opportunityStore.get(String(patch.opportunity_external_id));
@@ -104,10 +131,14 @@ function findOpportunityByPatch(patch) {
 
       if (patch.company?.normalized_value && opportunity.company?.normalized_value === patch.company.normalized_value) {
         score += 3;
+      } else if (matchesAcceptedAlias('company', patch.company?.normalized_value, opportunity.company?.normalized_value)) {
+        score += 2.5;
       }
 
       if (patch.project_object?.normalized_value && opportunity.project_object?.normalized_value === patch.project_object.normalized_value) {
         score += 3;
+      } else if (matchesAcceptedAlias('object', patch.project_object?.normalized_value, opportunity.project_object?.normalized_value)) {
+        score += 2.5;
       }
 
       if (patch.address?.normalized_value && opportunity.address?.normalized_value === patch.address.normalized_value) {
@@ -120,6 +151,8 @@ function findOpportunityByPatch(patch) {
 
       if (patch.person?.normalized_value && opportunity.contact_person?.normalized_value === patch.person.normalized_value) {
         score += 2.5;
+      } else if (matchesAcceptedAlias('person', patch.person?.normalized_value, opportunity.contact_person?.normalized_value)) {
+        score += 2;
       }
 
       return {

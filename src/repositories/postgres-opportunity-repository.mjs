@@ -178,6 +178,38 @@ async function ensureNormalizationDecisionSchema() {
   normalizationDecisionSchemaEnsured = true;
 }
 
+async function listAcceptedNormalizationAliases() {
+  await ensureNormalizationDecisionSchema();
+  const { rows } = await query(
+    `
+      SELECT candidate_key
+      FROM normalization_decisions
+      WHERE decision_status = 'accepted'
+    `,
+  );
+
+  return rows
+    .map((row) => String(row.candidate_key ?? '').split('::'))
+    .filter((parts) => parts.length === 3)
+    .map(([entity_kind, left_label, right_label]) => ({
+      entity_kind,
+      left_label,
+      right_label,
+    }));
+}
+
+function matchAcceptedAlias(aliases, entityKind, leftValue, rightValue) {
+  if (!leftValue || !rightValue) return false;
+  const normalizedLeft = String(leftValue).toLowerCase();
+  const normalizedRight = String(rightValue).toLowerCase();
+  return aliases.some((item) =>
+    item.entity_kind === entityKind
+    && (
+      (item.left_label === normalizedLeft && item.right_label === normalizedRight)
+      || (item.left_label === normalizedRight && item.right_label === normalizedLeft)
+    ));
+}
+
 async function fetchOpportunityRows(optionalExternalId = null) {
   const conditions = optionalExternalId ? 'WHERE o.external_opportunity_id = $1 OR o.id::text = $1' : '';
   const params = optionalExternalId ? [optionalExternalId] : [];
@@ -269,6 +301,7 @@ async function insertNormalizationResults(client, patch, event) {
 }
 
 async function resolveOpportunityDbId(client, patch) {
+  const acceptedAliases = await listAcceptedNormalizationAliases();
   if (patch.opportunity_external_id) {
     const direct = await client.query(
       `
@@ -363,6 +396,9 @@ async function resolveOpportunityDbId(client, patch) {
     `
       SELECT
         o.id,
+        c.normalized_name AS company_normalized_value,
+        po.normalized_name AS project_object_normalized_value,
+        p.normalized_name AS person_normalized_value,
         (
           CASE WHEN $1::text IS NOT NULL AND c.normalized_name = $1 THEN 3 ELSE 0 END +
           CASE WHEN $2::text IS NOT NULL AND po.normalized_name = $2 THEN 3 ELSE 0 END +
@@ -396,11 +432,16 @@ async function resolveOpportunityDbId(client, patch) {
 
   if (contextual.rows[0]?.id) {
     const matchScore = Number(contextual.rows[0].match_score ?? 0);
+    const aliasBonus =
+      (matchAcceptedAlias(acceptedAliases, 'company', patch.company?.normalized_value, contextual.rows[0].company_normalized_value) ? 0.2 : 0)
+      + (matchAcceptedAlias(acceptedAliases, 'object', patch.project_object?.normalized_value, contextual.rows[0].project_object_normalized_value) ? 0.2 : 0)
+      + (matchAcceptedAlias(acceptedAliases, 'person', patch.person?.normalized_value, contextual.rows[0].person_normalized_value) ? 0.15 : 0);
+    const boostedScore = matchScore + aliasBonus;
     return {
       id: contextual.rows[0].id,
       match_type: 'contextual',
-      match_score: matchScore,
-      suspicious: matchScore < 5,
+      match_score: boostedScore,
+      suspicious: boostedScore < 5,
     };
   }
 
