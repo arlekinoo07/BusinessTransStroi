@@ -469,7 +469,7 @@ function renderNormalizationDashboard(payload) {
   }
 
   els.normalizationList.innerHTML = items.slice(0, 10).map((item) => `
-    <article class="queue-item">
+    <article class="queue-item" data-candidate-key="${item.candidate_key}">
       <div class="queue-top">
         <div>
           <h3 class="queue-title">${item.left_label}</h3>
@@ -483,8 +483,29 @@ function renderNormalizationDashboard(payload) {
         <span class="badge badge-${item.merge_priority === 'merge_now' ? 'critical' : item.merge_priority === 'review_fast' ? 'high' : 'low'}">${item.merge_priority ?? 'review'}</span>
         ${(item.match_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
       </div>
+      <div class="action-row" style="margin-top: 10px;">
+        <button class="button button-success" data-normalization-action="accepted">Accept merge</button>
+        <button class="button button-secondary" data-normalization-action="review_later">Review later</button>
+        <button class="button button-danger" data-normalization-action="ignored">Ignore</button>
+      </div>
     </article>
   `).join('');
+
+  document.querySelectorAll('#normalizationList [data-normalization-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const candidateKey = button.closest('[data-candidate-key]')?.dataset.candidateKey;
+      if (!candidateKey) return;
+      await api('/normalization/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_key: candidateKey,
+          decision_status: button.dataset.normalizationAction,
+        }),
+      });
+      await loadNormalizationDashboard();
+    });
+  });
 }
 
 function renderFeedbackLearningDashboard(payload) {

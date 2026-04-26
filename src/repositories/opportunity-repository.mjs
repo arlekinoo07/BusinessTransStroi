@@ -2,6 +2,7 @@ import {
   auditLogStore,
   feedbackStore,
   ingestEventStore,
+  normalizationDecisionStore,
   opportunityStore,
   recommendationStore,
   stateSnapshotStore,
@@ -395,6 +396,24 @@ export class InMemoryOpportunityRepository {
       }
     }
     return items.slice(0, limit).map(clone);
+  }
+
+  async saveNormalizationDecision(payload) {
+    const record = {
+      candidate_key: payload.candidate_key,
+      decision_status: payload.decision_status,
+      note: payload.note ?? null,
+      actor_name: payload.actor_name ?? null,
+      actor_role: payload.actor_role ?? null,
+      decided_at: currentIsoTime(),
+    };
+    normalizationDecisionStore.set(payload.candidate_key, record);
+    return clone(record);
+  }
+
+  async getNormalizationDecision(candidateKey) {
+    const record = normalizationDecisionStore.get(candidateKey);
+    return record ? clone(record) : null;
   }
 
   async saveIngestEvent(payload) {

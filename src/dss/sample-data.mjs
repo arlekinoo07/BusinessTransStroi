@@ -145,3 +145,4 @@ export const ingestEventStore = [];
 export const recommendationStore = new Map();
 export const stateSnapshotStore = new Map();
 export const auditLogStore = [];
+export const normalizationDecisionStore = new Map();

@@ -138,6 +138,7 @@ function roundRate(value) {
 }
 
 let auditSchemaEnsured = false;
+let normalizationDecisionSchemaEnsured = false;
 
 async function ensureAuditSchema() {
   if (auditSchemaEnsured) return;
@@ -159,6 +160,22 @@ async function ensureAuditSchema() {
   `);
   await query('CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC)');
   auditSchemaEnsured = true;
+}
+
+async function ensureNormalizationDecisionSchema() {
+  if (normalizationDecisionSchemaEnsured) return;
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS normalization_decisions (
+      candidate_key TEXT PRIMARY KEY,
+      decision_status TEXT NOT NULL,
+      note TEXT,
+      actor_name TEXT,
+      actor_role TEXT,
+      decided_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  normalizationDecisionSchemaEnsured = true;
 }
 
 async function fetchOpportunityRows(optionalExternalId = null) {
@@ -700,6 +717,53 @@ export class PostgresOpportunityRepository {
     );
 
     return rows;
+  }
+
+  async saveNormalizationDecision(payload) {
+    await ensureNormalizationDecisionSchema();
+    const { rows } = await query(
+      `
+        INSERT INTO normalization_decisions (
+          candidate_key,
+          decision_status,
+          note,
+          actor_name,
+          actor_role,
+          decided_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (candidate_key)
+        DO UPDATE SET
+          decision_status = EXCLUDED.decision_status,
+          note = EXCLUDED.note,
+          actor_name = EXCLUDED.actor_name,
+          actor_role = EXCLUDED.actor_role,
+          decided_at = NOW()
+        RETURNING candidate_key, decision_status, note, actor_name, actor_role, decided_at
+      `,
+      [
+        payload.candidate_key,
+        payload.decision_status,
+        payload.note ?? null,
+        payload.actor_name ?? null,
+        payload.actor_role ?? null,
+      ],
+    );
+    return rows[0] ?? null;
+  }
+
+  async getNormalizationDecision(candidateKey) {
+    await ensureNormalizationDecisionSchema();
+    const { rows } = await query(
+      `
+        SELECT candidate_key, decision_status, note, actor_name, actor_role, decided_at
+        FROM normalization_decisions
+        WHERE candidate_key = $1
+        LIMIT 1
+      `,
+      [candidateKey],
+    );
+    return rows[0] ?? null;
   }
 
   async upsertUserContext(user) {

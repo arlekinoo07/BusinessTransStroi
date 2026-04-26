@@ -1307,6 +1307,11 @@ export async function buildNormalizationDashboard({ action = '' } = {}) {
     }),
   ]
     .map((item) => {
+      const candidateKey = [
+        item.entity_kind,
+        item.left_label,
+        item.right_label,
+      ].join('::').toLowerCase();
       const priority = item.similarity_score >= 0.92
         ? 'merge_now'
         : item.similarity_score >= 0.84
@@ -1314,6 +1319,7 @@ export async function buildNormalizationDashboard({ action = '' } = {}) {
           : 'review';
       return {
         ...item,
+        candidate_key: candidateKey,
         merge_priority: priority,
         suggested_action: priority === 'merge_now'
           ? 'Объединить автоматически после проверки'
@@ -1324,23 +1330,30 @@ export async function buildNormalizationDashboard({ action = '' } = {}) {
     })
     .sort((left, right) => right.similarity_score - left.similarity_score)
     .slice(0, 50);
+  const candidatesWithDecisions = await Promise.all(
+    candidates.map(async (item) => ({
+      ...item,
+      decision: await repository.getNormalizationDecision(item.candidate_key),
+    })),
+  );
   const priorityBreakdown = ['merge_now', 'review_fast', 'review']
     .map((priority_code) => ({
       priority_code,
-      count: candidates.filter((item) => item.merge_priority === priority_code).length,
+      count: candidatesWithDecisions.filter((item) => item.merge_priority === priority_code && !item.decision).length,
     }))
     .filter((item) => item.count > 0);
 
+  const unresolvedCandidates = candidatesWithDecisions.filter((item) => !item.decision);
   const filteredCandidates = action
-    ? candidates.filter((item) => item.merge_priority === action)
-    : candidates;
+    ? unresolvedCandidates.filter((item) => item.merge_priority === action)
+    : unresolvedCandidates;
 
   return {
     summary: {
       companies_seen: companies.length,
       objects_seen: objects.length,
       persons_seen: persons.length,
-      duplicate_candidates: candidates.length,
+      duplicate_candidates: unresolvedCandidates.length,
       priority_breakdown: priorityBreakdown,
     },
     items: filteredCandidates,
@@ -1612,6 +1625,27 @@ export function createAppServer() {
         const denied = requirePermission(auth, 'dashboard.feedback_learning');
         if (denied) return sendJson(response, 403, denied);
         return sendJson(response, 200, await buildFeedbackLearningDashboard());
+      }
+
+      if (request.method === 'POST' && url.pathname === '/normalization/decision') {
+        const denied = requirePermission(auth, 'dashboard.normalization');
+        if (denied) return sendJson(response, 403, denied);
+        const payload = await readJson(request);
+        const saved = await repository.saveNormalizationDecision({
+          candidate_key: payload.candidate_key,
+          decision_status: payload.decision_status,
+          note: payload.note ?? null,
+          actor_name: auth?.user?.full_name ?? null,
+          actor_role: auth?.user?.role_code ?? null,
+        });
+        await writeAuditLog(
+          auth,
+          'normalization_decision',
+          'normalization_candidate',
+          payload.candidate_key,
+          { decision_status: payload.decision_status },
+        );
+        return sendJson(response, 200, { ok: true, item: saved });
       }
 
       if (request.method === 'GET' && url.pathname === '/audit/logs') {
