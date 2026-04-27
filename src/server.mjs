@@ -38,8 +38,12 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
 };
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, options = {}) {
   response.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
+  if (options.headOnly) {
+    response.end();
+    return;
+  }
   response.end(JSON.stringify(payload, null, 2));
 }
 
@@ -60,7 +64,7 @@ async function writeAuditLog(auth, actionCode, resourceType, resourceId, details
   });
 }
 
-async function serveStaticFile(response, relativePath) {
+async function serveStaticFile(response, relativePath, options = {}) {
   const safePath = relativePath.replace(/^\/+/, '') || 'index.html';
   const filePath = path.resolve(publicDir, safePath);
 
@@ -75,6 +79,10 @@ async function serveStaticFile(response, relativePath) {
     response.writeHead(200, {
       'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream',
     });
+    if (options.headOnly) {
+      response.end();
+      return;
+    }
     response.end(content);
   } catch {
     notFound(response);
@@ -1480,9 +1488,11 @@ export function createAppServer() {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
       const auth = resolveAuthContext(request);
+      const isHead = request.method === 'HEAD';
+      const isGetLike = request.method === 'GET' || isHead;
 
-      if (request.method === 'GET' && url.pathname === '/health') {
-        return sendJson(response, 200, { status: 'ok', service: 'ai-sales-decision-engine' });
+      if (isGetLike && url.pathname === '/health') {
+        return sendJson(response, 200, { status: 'ok', service: 'ai-sales-decision-engine' }, { headOnly: isHead });
       }
 
       if (request.method === 'GET' && url.pathname === '/auth/me') {
@@ -1490,13 +1500,13 @@ export function createAppServer() {
         return sendJson(response, 200, auth);
       }
 
-      if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/app')) {
-        await serveStaticFile(response, 'index.html');
+      if (isGetLike && (url.pathname === '/' || url.pathname === '/app')) {
+        await serveStaticFile(response, 'index.html', { headOnly: isHead });
         return;
       }
 
-      if (request.method === 'GET' && url.pathname.startsWith('/app/')) {
-        await serveStaticFile(response, url.pathname.replace('/app/', ''));
+      if (isGetLike && url.pathname.startsWith('/app/')) {
+        await serveStaticFile(response, url.pathname.replace('/app/', ''), { headOnly: isHead });
         return;
       }
 
