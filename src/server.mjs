@@ -124,6 +124,13 @@ function toPriorityBucket(priorityScore) {
   return 'low';
 }
 
+function diffMinutesFromNow(value) {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return null;
+  return Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+}
+
 function buildLossRiskSummary(opportunity, state) {
   if (state.states.some((item) => item.state_code === 'hot_unworked')) {
     return {
@@ -847,6 +854,31 @@ export async function buildSystemStatusDashboard() {
     }
   }
 
+  const latestProcessedMinutes = diffMinutesFromNow(diagnostics.latest_processed_ingest_at ?? null);
+  const latestIssueMinutes = diffMinutesFromNow(diagnostics.latest_ingest_issue_at ?? null);
+  const latestRecommendationMinutes = diffMinutesFromNow(diagnostics.latest_recommendation_at ?? null);
+
+  let freshnessState = 'active';
+  if (!diagnostics.latest_processed_ingest_at) {
+    freshnessState = 'idle';
+  } else if (latestProcessedMinutes !== null && latestProcessedMinutes > 180) {
+    freshnessState = 'stale';
+  } else if (latestProcessedMinutes !== null && latestProcessedMinutes > 60) {
+    freshnessState = 'warming';
+  }
+
+  const warnings = [];
+  if (!postgres.reachable && postgres.configured) warnings.push('postgres_unreachable');
+  if (vectorStatus.configured && !vectorStatus.enabled) warnings.push('qdrant_unreachable');
+  if (graphStatus.configured && !graphStatus.reachable) warnings.push('neo4j_unreachable');
+  if (failedIngest.some((item) => item.processing_status === 'failed')) warnings.push('failed_ingest_present');
+  if (pendingIngest.length > 10) warnings.push('ingest_backlog');
+  if (freshnessState === 'stale') warnings.push('ingest_stale');
+
+  const overallState = warnings.length
+    ? (warnings.some((item) => item.endsWith('unreachable') || item === 'ingest_stale') ? 'degraded' : 'attention')
+    : 'healthy';
+
   return {
     postgres,
     qdrant: vectorStatus,
@@ -858,7 +890,9 @@ export async function buildSystemStatusDashboard() {
       latest_ingest_at: diagnostics.latest_ingest_at ?? null,
       latest_processed_ingest_at: diagnostics.latest_processed_ingest_at ?? null,
       latest_issue_at: diagnostics.latest_ingest_issue_at ?? null,
-      freshness_state: diagnostics.latest_processed_ingest_at ? 'active' : 'idle',
+      freshness_state: freshnessState,
+      latest_processed_age_min: latestProcessedMinutes,
+      latest_issue_age_min: latestIssueMinutes,
     },
     app: {
       service: 'bts-dss',
@@ -866,8 +900,11 @@ export async function buildSystemStatusDashboard() {
       timestamp: new Date().toISOString(),
       started_at: APP_STARTED_AT,
       latest_recommendation_at: diagnostics.latest_recommendation_at ?? null,
+      latest_recommendation_age_min: latestRecommendationMinutes,
       latest_audit_at: diagnostics.latest_audit_at ?? null,
     },
+    overall_state: overallState,
+    warnings,
   };
 }
 

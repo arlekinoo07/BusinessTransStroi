@@ -322,8 +322,14 @@ function renderSystemStatus(payload) {
   const neo4j = payload.neo4j ?? {};
   const ingest = payload.ingest ?? {};
   const app = payload.app ?? {};
+  const warnings = payload.warnings ?? [];
+  const overallState = payload.overall_state ?? 'unknown';
 
   els.systemStatusSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Overall</span>
+      <strong>${overallState}</strong>
+    </div>
     <div class="stat-card">
       <span class="stat-label">Postgres</span>
       <strong>${postgres.reachable ? 'online' : postgres.configured ? 'configured' : 'off'}</strong>
@@ -357,12 +363,24 @@ function renderSystemStatus(payload) {
       <strong>${formatDateTime(ingest.latest_ingest_at)}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Processed Age</span>
+      <strong>${ingest.latest_processed_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Last Ingest Issue</span>
       <strong>${formatDateTime(ingest.latest_issue_at)}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Issue Age</span>
+      <strong>${ingest.latest_issue_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Last Recommendation</span>
       <strong>${formatDateTime(app.latest_recommendation_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Recommendation Age</span>
+      <strong>${app.latest_recommendation_age_min ?? '—'} min</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Started</span>
@@ -375,6 +393,10 @@ function renderSystemStatus(payload) {
     <div class="stat-card">
       <span class="stat-label">Env</span>
       <strong>${app.environment ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Warnings</span>
+      <strong>${warnings.length ? warnings.join(', ') : 'none'}</strong>
     </div>
   `;
 }

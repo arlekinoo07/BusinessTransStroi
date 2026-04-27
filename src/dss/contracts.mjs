@@ -733,6 +733,8 @@ export const systemStatusSchema = {
         latest_processed_ingest_at: { type: ['string', 'null'], format: 'date-time' },
         latest_issue_at: { type: ['string', 'null'], format: 'date-time' },
         freshness_state: { type: 'string' },
+        latest_processed_age_min: { type: ['number', 'null'] },
+        latest_issue_age_min: { type: ['number', 'null'] },
       },
     },
     app: {
@@ -743,8 +745,14 @@ export const systemStatusSchema = {
         timestamp: { type: 'string', format: 'date-time' },
         started_at: { type: 'string', format: 'date-time' },
         latest_recommendation_at: { type: ['string', 'null'], format: 'date-time' },
+        latest_recommendation_age_min: { type: ['number', 'null'] },
         latest_audit_at: { type: ['string', 'null'], format: 'date-time' },
       },
+    },
+    overall_state: { type: 'string' },
+    warnings: {
+      type: 'array',
+      items: { type: 'string' },
     },
   },
 };
