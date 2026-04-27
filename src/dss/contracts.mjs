@@ -717,6 +717,17 @@ export const graphViewSchema = {
   },
 };
 
+export const systemStatusSchema = {
+  type: 'object',
+  properties: {
+    postgres: { type: 'object' },
+    qdrant: { type: 'object' },
+    neo4j: { type: 'object' },
+    ingest: { type: 'object' },
+    app: { type: 'object' },
+  },
+};
+
 export function getContractsOverview() {
   return {
     bitrix_event: bitrixEventSchema,
@@ -731,5 +742,6 @@ export function getContractsOverview() {
     data_quality: dataQualitySchema,
     feedback_learning: feedbackLearningSchema,
     graph_view: graphViewSchema,
+    system_status: systemStatusSchema,
   };
 }

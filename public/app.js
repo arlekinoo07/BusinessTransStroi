@@ -29,6 +29,7 @@ const els = {
   logisticsList: document.querySelector('#logisticsList'),
   ownerSummary: document.querySelector('#ownerSummary'),
   ownerList: document.querySelector('#ownerList'),
+  systemStatusSummary: document.querySelector('#systemStatusSummary'),
   cardView: document.querySelector('#cardView'),
   pendingList: document.querySelector('#pendingList'),
   errorList: document.querySelector('#errorList'),
@@ -313,6 +314,49 @@ function renderOwnerDashboard(payload) {
       loadCard(node.dataset.opportunityId);
     });
   });
+}
+
+function renderSystemStatus(payload) {
+  const postgres = payload.postgres ?? {};
+  const qdrant = payload.qdrant ?? {};
+  const neo4j = payload.neo4j ?? {};
+  const ingest = payload.ingest ?? {};
+  const app = payload.app ?? {};
+
+  els.systemStatusSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Postgres</span>
+      <strong>${postgres.reachable ? 'online' : postgres.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Qdrant</span>
+      <strong>${qdrant.enabled ? 'online' : qdrant.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Neo4j</span>
+      <strong>${neo4j.reachable ? 'online' : neo4j.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Pending Ingest</span>
+      <strong>${ingest.pending_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Failed Ingest</span>
+      <strong>${ingest.failed_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Suspicious Ingest</span>
+      <strong>${ingest.suspicious_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Service</span>
+      <strong>${app.service ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Env</span>
+      <strong>${app.environment ?? '—'}</strong>
+    </div>
+  `;
 }
 
 function renderQualityDashboard(payload) {
@@ -1189,6 +1233,12 @@ async function loadOwnerDashboard() {
   return payload.items ?? [];
 }
 
+async function loadSystemStatus() {
+  const payload = await api('/dashboard/system-status');
+  renderSystemStatus(payload);
+  return payload;
+}
+
 async function refreshAll() {
   try {
     await loadAuthMe();
@@ -1200,6 +1250,7 @@ async function refreshAll() {
       loadAuditLogs(),
       loadLogisticsDashboard(),
       loadOwnerDashboard(),
+      loadSystemStatus(),
     ]);
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {

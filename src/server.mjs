@@ -20,6 +20,7 @@ import { createRepository } from './repositories/opportunity-repository.mjs';
 import { getQdrantStatus } from './services/qdrant-vector-service.mjs';
 import { getSimilarCases } from './services/similar-cases-service.mjs';
 import { evaluateOpportunityState } from './dss/state-engine.mjs';
+import { hasPostgresConfig, query as pgQuery } from './db/postgres.mjs';
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -813,6 +814,51 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
       ingest_unresolved_events: unresolvedIngestCount,
     },
     items,
+  };
+}
+
+export async function buildSystemStatusDashboard() {
+  const [vectorStatus, graphStatus, pendingIngest, failedIngest] = await Promise.all([
+    getQdrantStatus(),
+    getNeo4jStatus(),
+    repository.listPendingIngestEvents?.(20) ?? [],
+    repository.listFailedIngestEvents(50),
+  ]);
+
+  let postgres = {
+    configured: hasPostgresConfig(),
+    reachable: false,
+  };
+
+  if (postgres.configured) {
+    try {
+      await pgQuery('SELECT 1');
+      postgres = {
+        configured: true,
+        reachable: true,
+      };
+    } catch {
+      postgres = {
+        configured: true,
+        reachable: false,
+      };
+    }
+  }
+
+  return {
+    postgres,
+    qdrant: vectorStatus,
+    neo4j: graphStatus,
+    ingest: {
+      pending_count: pendingIngest.length,
+      failed_count: failedIngest.filter((item) => item.processing_status === 'failed').length,
+      suspicious_count: failedIngest.filter((item) => item.processing_status === 'suspicious').length,
+    },
+    app: {
+      service: 'bts-dss',
+      environment: process.env.NODE_ENV ?? 'development',
+      timestamp: new Date().toISOString(),
+    },
   };
 }
 
@@ -1638,6 +1684,12 @@ export function createAppServer() {
         const denied = requirePermission(auth, 'dashboard.feedback_learning');
         if (denied) return sendJson(response, 403, denied);
         return sendJson(response, 200, await buildFeedbackLearningDashboard());
+      }
+
+      if (request.method === 'GET' && url.pathname === '/dashboard/system-status') {
+        const denied = requirePermission(auth, 'dashboard.data_quality');
+        if (denied) return sendJson(response, 403, denied);
+        return sendJson(response, 200, await buildSystemStatusDashboard());
       }
 
       if (request.method === 'POST' && url.pathname === '/normalization/decision') {
