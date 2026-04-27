@@ -25,6 +25,7 @@ import { hasPostgresConfig, query as pgQuery } from './db/postgres.mjs';
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const repository = createRepository();
+const APP_STARTED_AT = new Date().toISOString();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, '../public');
@@ -818,11 +819,12 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
 }
 
 export async function buildSystemStatusDashboard() {
-  const [vectorStatus, graphStatus, pendingIngest, failedIngest] = await Promise.all([
+  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics] = await Promise.all([
     getQdrantStatus(),
     getNeo4jStatus(),
     repository.listPendingIngestEvents?.(20) ?? [],
     repository.listFailedIngestEvents(50),
+    repository.getSystemDiagnostics?.() ?? {},
   ]);
 
   let postgres = {
@@ -853,11 +855,18 @@ export async function buildSystemStatusDashboard() {
       pending_count: pendingIngest.length,
       failed_count: failedIngest.filter((item) => item.processing_status === 'failed').length,
       suspicious_count: failedIngest.filter((item) => item.processing_status === 'suspicious').length,
+      latest_ingest_at: diagnostics.latest_ingest_at ?? null,
+      latest_processed_ingest_at: diagnostics.latest_processed_ingest_at ?? null,
+      latest_issue_at: diagnostics.latest_ingest_issue_at ?? null,
+      freshness_state: diagnostics.latest_processed_ingest_at ? 'active' : 'idle',
     },
     app: {
       service: 'bts-dss',
       environment: process.env.NODE_ENV ?? 'development',
       timestamp: new Date().toISOString(),
+      started_at: APP_STARTED_AT,
+      latest_recommendation_at: diagnostics.latest_recommendation_at ?? null,
+      latest_audit_at: diagnostics.latest_audit_at ?? null,
     },
   };
 }

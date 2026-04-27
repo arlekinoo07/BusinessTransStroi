@@ -349,6 +349,26 @@ function renderSystemStatus(payload) {
       <strong>${ingest.suspicious_count ?? 0}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Ingest Freshness</span>
+      <strong>${ingest.freshness_state ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Ingest</span>
+      <strong>${formatDateTime(ingest.latest_ingest_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Ingest Issue</span>
+      <strong>${formatDateTime(ingest.latest_issue_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Recommendation</span>
+      <strong>${formatDateTime(app.latest_recommendation_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Started</span>
+      <strong>${formatDateTime(app.started_at)}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Service</span>
       <strong>${app.service ?? '—'}</strong>
     </div>

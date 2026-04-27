@@ -723,8 +723,29 @@ export const systemStatusSchema = {
     postgres: { type: 'object' },
     qdrant: { type: 'object' },
     neo4j: { type: 'object' },
-    ingest: { type: 'object' },
-    app: { type: 'object' },
+    ingest: {
+      type: 'object',
+      properties: {
+        pending_count: { type: 'number' },
+        failed_count: { type: 'number' },
+        suspicious_count: { type: 'number' },
+        latest_ingest_at: { type: ['string', 'null'], format: 'date-time' },
+        latest_processed_ingest_at: { type: ['string', 'null'], format: 'date-time' },
+        latest_issue_at: { type: ['string', 'null'], format: 'date-time' },
+        freshness_state: { type: 'string' },
+      },
+    },
+    app: {
+      type: 'object',
+      properties: {
+        service: { type: 'string' },
+        environment: { type: 'string' },
+        timestamp: { type: 'string', format: 'date-time' },
+        started_at: { type: 'string', format: 'date-time' },
+        latest_recommendation_at: { type: ['string', 'null'], format: 'date-time' },
+        latest_audit_at: { type: ['string', 'null'], format: 'date-time' },
+      },
+    },
   },
 };
 

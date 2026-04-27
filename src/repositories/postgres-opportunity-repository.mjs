@@ -744,6 +744,35 @@ export class PostgresOpportunityRepository {
     return rows;
   }
 
+  async getSystemDiagnostics() {
+    const { rows } = await query(
+      `
+        SELECT
+          (SELECT MAX(created_at) FROM ingest_events) AS latest_ingest_at,
+          (
+            SELECT MAX(updated_at)
+            FROM ingest_events
+            WHERE processing_status IN ('processed', 'suspicious', 'failed')
+          ) AS latest_processed_ingest_at,
+          (
+            SELECT MAX(updated_at)
+            FROM ingest_events
+            WHERE processing_status IN ('failed', 'suspicious')
+          ) AS latest_ingest_issue_at,
+          (SELECT MAX(created_at) FROM recommendations) AS latest_recommendation_at,
+          (SELECT MAX(created_at) FROM audit_logs) AS latest_audit_at
+      `,
+    );
+
+    return rows[0] ?? {
+      latest_ingest_at: null,
+      latest_processed_ingest_at: null,
+      latest_ingest_issue_at: null,
+      latest_recommendation_at: null,
+      latest_audit_at: null,
+    };
+  }
+
   async listNormalizationResults(limit = 500) {
     const { rows } = await query(
       `

@@ -218,6 +218,29 @@ export class InMemoryOpportunityRepository {
     return feedbackStore.map(clone);
   }
 
+  async getSystemDiagnostics() {
+    const latestIngestEvent = [...ingestEventStore]
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0] ?? null;
+    const latestProcessedIngestEvent = [...ingestEventStore]
+      .filter((item) => ['processed', 'suspicious', 'failed'].includes(item.processing_status))
+      .sort((left, right) => new Date(right.updated_at ?? right.created_at).getTime() - new Date(left.updated_at ?? left.created_at).getTime())[0] ?? null;
+    const latestIngestIssue = [...ingestEventStore]
+      .filter((item) => ['failed', 'suspicious'].includes(item.processing_status))
+      .sort((left, right) => new Date(right.updated_at ?? right.created_at).getTime() - new Date(left.updated_at ?? left.created_at).getTime())[0] ?? null;
+    const latestRecommendation = [...recommendationStore.values()]
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0] ?? null;
+    const latestAuditLog = [...auditLogStore]
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0] ?? null;
+
+    return {
+      latest_ingest_at: latestIngestEvent?.created_at ?? null,
+      latest_processed_ingest_at: latestProcessedIngestEvent?.updated_at ?? latestProcessedIngestEvent?.created_at ?? null,
+      latest_ingest_issue_at: latestIngestIssue?.updated_at ?? latestIngestIssue?.created_at ?? null,
+      latest_recommendation_at: latestRecommendation?.created_at ?? null,
+      latest_audit_at: latestAuditLog?.created_at ?? null,
+    };
+  }
+
   async listFeedbackForOpportunity(opportunityId) {
     const recommendations = Array.from(recommendationStore.values())
       .filter((item) => item.opportunity_id === opportunityId)
