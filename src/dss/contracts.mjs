@@ -744,6 +744,8 @@ export const systemStatusSchema = {
         environment: { type: 'string' },
         timestamp: { type: 'string', format: 'date-time' },
         started_at: { type: 'string', format: 'date-time' },
+        http_reachable: { type: 'boolean' },
+        http_status_code: { type: ['number', 'null'] },
         latest_recommendation_at: { type: ['string', 'null'], format: 'date-time' },
         latest_recommendation_age_min: { type: ['number', 'null'] },
         latest_audit_at: { type: ['string', 'null'], format: 'date-time' },

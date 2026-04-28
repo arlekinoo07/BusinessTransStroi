@@ -139,6 +139,46 @@ function diffMinutesFromNow(value) {
   return Math.max(0, Math.round((Date.now() - timestamp) / 60000));
 }
 
+async function checkLocalHttpHealth() {
+  const targetHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
+
+  return new Promise((resolve) => {
+    const request = http.request(
+      {
+        host: targetHost,
+        port: PORT,
+        path: '/health',
+        method: 'HEAD',
+        timeout: 1500,
+      },
+      (response) => {
+        response.resume();
+        resolve({
+          reachable: response.statusCode === 200,
+          status_code: response.statusCode ?? null,
+        });
+      },
+    );
+
+    request.on('timeout', () => {
+      request.destroy();
+      resolve({
+        reachable: false,
+        status_code: null,
+      });
+    });
+
+    request.on('error', () => {
+      resolve({
+        reachable: false,
+        status_code: null,
+      });
+    });
+
+    request.end();
+  });
+}
+
 function buildLossRiskSummary(opportunity, state) {
   if (state.states.some((item) => item.state_code === 'hot_unworked')) {
     return {
@@ -834,12 +874,13 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
 }
 
 export async function buildSystemStatusDashboard() {
-  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics] = await Promise.all([
+  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics, httpCheck] = await Promise.all([
     getQdrantStatus(),
     getNeo4jStatus(),
     repository.listPendingIngestEvents?.(20) ?? [],
     repository.listFailedIngestEvents(50),
     repository.getSystemDiagnostics?.() ?? {},
+    checkLocalHttpHealth(),
   ]);
 
   let postgres = {
@@ -879,6 +920,7 @@ export async function buildSystemStatusDashboard() {
   if (!postgres.reachable && postgres.configured) warnings.push('postgres_unreachable');
   if (vectorStatus.configured && !vectorStatus.enabled) warnings.push('qdrant_unreachable');
   if (graphStatus.configured && !graphStatus.reachable) warnings.push('neo4j_unreachable');
+  if (!httpCheck.reachable) warnings.push('app_http_unreachable');
   if (failedIngest.some((item) => item.processing_status === 'failed')) warnings.push('failed_ingest_present');
   if (pendingIngest.length > 10) warnings.push('ingest_backlog');
   if (freshnessState === 'stale') warnings.push('ingest_stale');
@@ -907,6 +949,8 @@ export async function buildSystemStatusDashboard() {
       environment: process.env.NODE_ENV ?? 'development',
       timestamp: new Date().toISOString(),
       started_at: APP_STARTED_AT,
+      http_reachable: httpCheck.reachable,
+      http_status_code: httpCheck.status_code,
       latest_recommendation_at: diagnostics.latest_recommendation_at ?? null,
       latest_recommendation_age_min: latestRecommendationMinutes,
       latest_audit_at: diagnostics.latest_audit_at ?? null,

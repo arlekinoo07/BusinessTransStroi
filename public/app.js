@@ -391,6 +391,10 @@ function renderSystemStatus(payload) {
       <strong>${app.service ?? '—'}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">HTTP</span>
+      <strong>${app.http_reachable ? `online (${app.http_status_code ?? 200})` : 'down'}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Env</span>
       <strong>${app.environment ?? '—'}</strong>
     </div>
