@@ -183,6 +183,25 @@ async function checkLocalHttpHealth() {
   });
 }
 
+function deriveReadiness(systemStatus) {
+  const blockingWarnings = new Set([
+    'postgres_unreachable',
+    'qdrant_unreachable',
+    'neo4j_unreachable',
+    'app_http_unreachable',
+    'ingest_stale',
+  ]);
+
+  const reasons = (systemStatus.warnings ?? []).filter((item) => blockingWarnings.has(item));
+  const ready = reasons.length === 0;
+
+  return {
+    ready,
+    state: ready ? 'ready' : 'not_ready',
+    reasons,
+  };
+}
+
 function buildLossRiskSummary(opportunity, state) {
   if (state.states.some((item) => item.state_code === 'hot_unworked')) {
     return {
@@ -935,8 +954,7 @@ export async function buildSystemStatusDashboard() {
   const overallState = warnings.length
     ? (warnings.some((item) => item.endsWith('unreachable') || item === 'ingest_stale') ? 'degraded' : 'attention')
     : 'healthy';
-
-  return {
+  const systemStatus = {
     postgres,
     qdrant: vectorStatus,
     neo4j: graphStatus,
@@ -967,6 +985,11 @@ export async function buildSystemStatusDashboard() {
     },
     overall_state: overallState,
     warnings,
+  };
+
+  return {
+    ...systemStatus,
+    readiness: deriveReadiness(systemStatus),
   };
 }
 
@@ -1547,6 +1570,22 @@ export function createAppServer() {
 
       if (isGetLike && url.pathname === '/health') {
         return sendJson(response, 200, { status: 'ok', service: 'ai-sales-decision-engine' }, { headOnly: isHead });
+      }
+
+      if (isGetLike && url.pathname === '/ready') {
+        const status = await buildSystemStatusDashboard();
+        const readiness = status.readiness ?? deriveReadiness(status);
+        return sendJson(
+          response,
+          readiness.ready ? 200 : 503,
+          {
+            status: readiness.state,
+            ready: readiness.ready,
+            reasons: readiness.reasons,
+            service: 'ai-sales-decision-engine',
+          },
+          { headOnly: isHead },
+        );
       }
 
       if (request.method === 'GET' && url.pathname === '/auth/me') {

@@ -755,6 +755,17 @@ export const systemStatusSchema = {
       },
     },
     overall_state: { type: 'string' },
+    readiness: {
+      type: 'object',
+      properties: {
+        ready: { type: 'boolean' },
+        state: { type: 'string' },
+        reasons: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
     warnings: {
       type: 'array',
       items: { type: 'string' },

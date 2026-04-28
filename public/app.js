@@ -322,6 +322,7 @@ function renderSystemStatus(payload) {
   const neo4j = payload.neo4j ?? {};
   const ingest = payload.ingest ?? {};
   const app = payload.app ?? {};
+  const readiness = payload.readiness ?? {};
   const warnings = payload.warnings ?? [];
   const overallState = payload.overall_state ?? 'unknown';
 
@@ -329,6 +330,10 @@ function renderSystemStatus(payload) {
     <div class="stat-card">
       <span class="stat-label">Overall</span>
       <strong>${overallState}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Readiness</span>
+      <strong>${readiness.state ?? 'unknown'}</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Postgres</span>
