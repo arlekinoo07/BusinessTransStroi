@@ -189,7 +189,6 @@ function deriveReadiness(systemStatus) {
     'qdrant_unreachable',
     'neo4j_unreachable',
     'app_http_unreachable',
-    'ingest_stale',
   ]);
 
   const reasons = (systemStatus.warnings ?? []).filter((item) => blockingWarnings.has(item));
