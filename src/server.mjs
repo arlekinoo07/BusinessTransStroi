@@ -974,6 +974,7 @@ export async function buildSystemStatusDashboard() {
       timestamp: new Date().toISOString(),
       started_at: APP_STARTED_AT,
       uptime_min: uptimeMinutes,
+      live_state: 'alive',
       http_reachable: httpCheck.reachable,
       http_status_code: httpCheck.status_code,
       http_latency_ms: httpCheck.latency_ms,
@@ -1569,6 +1570,10 @@ export function createAppServer() {
 
       if (isGetLike && url.pathname === '/health') {
         return sendJson(response, 200, { status: 'ok', service: 'ai-sales-decision-engine' }, { headOnly: isHead });
+      }
+
+      if (isGetLike && url.pathname === '/live') {
+        return sendJson(response, 200, { status: 'alive', live: true, service: 'ai-sales-decision-engine' }, { headOnly: isHead });
       }
 
       if (isGetLike && url.pathname === '/ready') {

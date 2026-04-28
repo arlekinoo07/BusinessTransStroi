@@ -745,6 +745,7 @@ export const systemStatusSchema = {
         timestamp: { type: 'string', format: 'date-time' },
         started_at: { type: 'string', format: 'date-time' },
         uptime_min: { type: ['number', 'null'] },
+        live_state: { type: 'string' },
         http_reachable: { type: 'boolean' },
         http_status_code: { type: ['number', 'null'] },
         http_latency_ms: { type: ['number', 'null'] },

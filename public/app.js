@@ -336,6 +336,10 @@ function renderSystemStatus(payload) {
       <strong>${readiness.state ?? 'unknown'}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Liveness</span>
+      <strong>${app.live_state ?? 'unknown'}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Postgres</span>
       <strong>${postgres.reachable ? 'online' : postgres.configured ? 'configured' : 'off'}</strong>
     </div>
