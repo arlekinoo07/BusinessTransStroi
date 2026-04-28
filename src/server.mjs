@@ -141,6 +141,7 @@ function diffMinutesFromNow(value) {
 
 async function checkLocalHttpHealth() {
   const targetHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
+  const startedAt = Date.now();
 
   return new Promise((resolve) => {
     const request = http.request(
@@ -156,6 +157,7 @@ async function checkLocalHttpHealth() {
         resolve({
           reachable: response.statusCode === 200,
           status_code: response.statusCode ?? null,
+          latency_ms: Date.now() - startedAt,
         });
       },
     );
@@ -165,6 +167,7 @@ async function checkLocalHttpHealth() {
       resolve({
         reachable: false,
         status_code: null,
+        latency_ms: null,
       });
     });
 
@@ -172,6 +175,7 @@ async function checkLocalHttpHealth() {
       resolve({
         reachable: false,
         status_code: null,
+        latency_ms: null,
       });
     });
 
@@ -906,6 +910,7 @@ export async function buildSystemStatusDashboard() {
   const latestProcessedMinutes = diffMinutesFromNow(diagnostics.latest_processed_ingest_at ?? null);
   const latestIssueMinutes = diffMinutesFromNow(diagnostics.latest_ingest_issue_at ?? null);
   const latestRecommendationMinutes = diffMinutesFromNow(diagnostics.latest_recommendation_at ?? null);
+  const uptimeMinutes = diffMinutesFromNow(APP_STARTED_AT);
 
   let freshnessState = 'active';
   if (!diagnostics.latest_processed_ingest_at) {
@@ -949,8 +954,10 @@ export async function buildSystemStatusDashboard() {
       environment: process.env.NODE_ENV ?? 'development',
       timestamp: new Date().toISOString(),
       started_at: APP_STARTED_AT,
+      uptime_min: uptimeMinutes,
       http_reachable: httpCheck.reachable,
       http_status_code: httpCheck.status_code,
+      http_latency_ms: httpCheck.latency_ms,
       latest_recommendation_at: diagnostics.latest_recommendation_at ?? null,
       latest_recommendation_age_min: latestRecommendationMinutes,
       latest_audit_at: diagnostics.latest_audit_at ?? null,

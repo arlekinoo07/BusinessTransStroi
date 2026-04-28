@@ -395,6 +395,14 @@ function renderSystemStatus(payload) {
       <strong>${app.http_reachable ? `online (${app.http_status_code ?? 200})` : 'down'}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">HTTP Latency</span>
+      <strong>${app.http_latency_ms ?? '—'} ms</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Uptime</span>
+      <strong>${app.uptime_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Env</span>
       <strong>${app.environment ?? '—'}</strong>
     </div>
