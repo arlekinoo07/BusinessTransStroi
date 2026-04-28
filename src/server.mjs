@@ -910,6 +910,7 @@ export async function buildSystemStatusDashboard() {
   const latestProcessedMinutes = diffMinutesFromNow(diagnostics.latest_processed_ingest_at ?? null);
   const latestIssueMinutes = diffMinutesFromNow(diagnostics.latest_ingest_issue_at ?? null);
   const latestRecommendationMinutes = diffMinutesFromNow(diagnostics.latest_recommendation_at ?? null);
+  const latestAuditMinutes = diffMinutesFromNow(diagnostics.latest_audit_at ?? null);
   const uptimeMinutes = diffMinutesFromNow(APP_STARTED_AT);
 
   let freshnessState = 'active';
@@ -926,6 +927,7 @@ export async function buildSystemStatusDashboard() {
   if (vectorStatus.configured && !vectorStatus.enabled) warnings.push('qdrant_unreachable');
   if (graphStatus.configured && !graphStatus.reachable) warnings.push('neo4j_unreachable');
   if (!httpCheck.reachable) warnings.push('app_http_unreachable');
+  if ((httpCheck.latency_ms ?? 0) > 500) warnings.push('app_http_slow');
   if (failedIngest.some((item) => item.processing_status === 'failed')) warnings.push('failed_ingest_present');
   if (pendingIngest.length > 10) warnings.push('ingest_backlog');
   if (freshnessState === 'stale') warnings.push('ingest_stale');
@@ -961,6 +963,7 @@ export async function buildSystemStatusDashboard() {
       latest_recommendation_at: diagnostics.latest_recommendation_at ?? null,
       latest_recommendation_age_min: latestRecommendationMinutes,
       latest_audit_at: diagnostics.latest_audit_at ?? null,
+      latest_audit_age_min: latestAuditMinutes,
     },
     overall_state: overallState,
     warnings,

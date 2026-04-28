@@ -383,6 +383,14 @@ function renderSystemStatus(payload) {
       <strong>${app.latest_recommendation_age_min ?? '—'} min</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Last Audit</span>
+      <strong>${formatDateTime(app.latest_audit_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Audit Age</span>
+      <strong>${app.latest_audit_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Started</span>
       <strong>${formatDateTime(app.started_at)}</strong>
     </div>

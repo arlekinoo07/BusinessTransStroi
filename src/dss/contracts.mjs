@@ -751,6 +751,7 @@ export const systemStatusSchema = {
         latest_recommendation_at: { type: ['string', 'null'], format: 'date-time' },
         latest_recommendation_age_min: { type: ['number', 'null'] },
         latest_audit_at: { type: ['string', 'null'], format: 'date-time' },
+        latest_audit_age_min: { type: ['number', 'null'] },
       },
     },
     overall_state: { type: 'string' },
