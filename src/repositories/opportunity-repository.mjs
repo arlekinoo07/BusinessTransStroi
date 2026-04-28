@@ -31,12 +31,22 @@ function ensureOpportunity(externalId) {
     project_object: null,
     address: null,
     equipment_type: null,
+    equipment_model: null,
     time_window: { start_at: null, duration_days: null },
     commercial_scenario: null,
     decision_access_status: null,
     commercial_stage: null,
     payment_readiness: null,
     technical_requirements: [],
+    work_conditions: [],
+    price_context: null,
+    client_expected_next_step: null,
+    geo_hint: null,
+    readiness_signals: {
+      contract_ready: false,
+      payment_ready: false,
+      urgency_high: false,
+    },
     economic_assessment: {
       expected_margin_percent: null,
       own_equipment_available: null,
@@ -540,6 +550,7 @@ export class InMemoryOpportunityRepository {
         opportunity.project_object = patch.project_object ?? opportunity.project_object;
         opportunity.address = patch.address ?? opportunity.address;
         opportunity.equipment_type = patch.equipment_type ?? opportunity.equipment_type;
+        opportunity.equipment_model = patch.equipment_model ?? opportunity.equipment_model ?? null;
         opportunity.time_window = {
           start_at: patch.requested_start_at ?? opportunity.time_window?.start_at ?? null,
           duration_days: patch.requested_duration_days ?? opportunity.time_window?.duration_days ?? null,
@@ -549,6 +560,14 @@ export class InMemoryOpportunityRepository {
         opportunity.commercial_stage = patch.commercial_stage ?? opportunity.commercial_stage;
         opportunity.payment_readiness = patch.payment_readiness ?? opportunity.payment_readiness;
         opportunity.technical_requirements = patch.technical_requirements ?? opportunity.technical_requirements;
+        opportunity.work_conditions = patch.work_conditions ?? opportunity.work_conditions ?? [];
+        opportunity.price_context = patch.price_context ?? opportunity.price_context ?? null;
+        opportunity.client_expected_next_step = patch.client_expected_next_step ?? opportunity.client_expected_next_step ?? null;
+        opportunity.geo_hint = patch.geo_hint ?? opportunity.geo_hint ?? null;
+        opportunity.readiness_signals = {
+          ...opportunity.readiness_signals,
+          ...(patch.readiness_signals ?? {}),
+        };
         opportunity.economic_assessment = {
           ...opportunity.economic_assessment,
           expected_margin_percent: patch.expected_margin_percent ?? opportunity.economic_assessment?.expected_margin_percent ?? null,
@@ -584,6 +603,7 @@ export class InMemoryOpportunityRepository {
             opportunity.project_object = patch.project_object ?? opportunity.project_object;
             opportunity.address = patch.address ?? opportunity.address;
             opportunity.equipment_type = patch.equipment_type ?? opportunity.equipment_type;
+            opportunity.equipment_model = patch.equipment_model ?? opportunity.equipment_model ?? null;
             opportunity.decision_access_status = patch.decision_access_status ?? opportunity.decision_access_status ?? null;
             opportunity.commercial_stage = patch.commercial_stage ?? opportunity.commercial_stage ?? null;
             opportunity.payment_readiness = patch.payment_readiness ?? opportunity.payment_readiness ?? null;
@@ -591,6 +611,17 @@ export class InMemoryOpportunityRepository {
               ...(opportunity.technical_requirements ?? []),
               ...(patch.technical_requirements ?? []),
             ])).filter(Boolean);
+            opportunity.work_conditions = Array.from(new Set([
+              ...(opportunity.work_conditions ?? []),
+              ...(patch.work_conditions ?? []),
+            ])).filter(Boolean);
+            opportunity.price_context = patch.price_context ?? opportunity.price_context ?? null;
+            opportunity.client_expected_next_step = patch.client_expected_next_step ?? opportunity.client_expected_next_step ?? null;
+            opportunity.geo_hint = patch.geo_hint ?? opportunity.geo_hint ?? null;
+            opportunity.readiness_signals = {
+              ...opportunity.readiness_signals,
+              ...(patch.readiness_signals ?? {}),
+            };
             opportunity.time_window = {
               start_at: patch.requested_start_at ?? opportunity.time_window?.start_at ?? null,
               duration_days: patch.requested_duration_days ?? opportunity.time_window?.duration_days ?? null,
@@ -621,6 +652,7 @@ export class InMemoryOpportunityRepository {
             summary: patch.summary_text ?? '',
             text: patch.raw_text ?? '',
             datetime: patch.event_datetime,
+            extraction_json: patch.extraction_json ?? null,
           });
           opportunity.last_touch_at = patch.event_datetime ?? opportunity.last_touch_at;
         }

@@ -44,6 +44,13 @@ const STATE_TO_ACTION = [
     why: 'Без уточнений система не рекомендует агрессивный дожим.',
   },
   {
+    state: 'object_access_unclear',
+    action: 'clarify_object_access',
+    escalation: null,
+    priority: 71,
+    why: 'Нужны уточнения по объекту и условиям доступа до логистического коммита.',
+  },
+  {
     state: 'decision_maker_reached',
     action: 'sales_call',
     escalation: null,
@@ -78,6 +85,41 @@ const STATE_TO_ACTION = [
     priority: 99,
     why: 'Шумовую сделку лучше не перегревать ресурсами команды.',
   },
+  {
+    state: 'manager_promise_overdue',
+    action: 'follow_up_reminder',
+    escalation: 'owner_escalation',
+    priority: 88,
+    why: 'Просроченное обещание менеджера требует немедленного возврата сделки в работу.',
+  },
+  {
+    state: 'low_margin_warning',
+    action: 'reprice_deal',
+    escalation: null,
+    priority: 79,
+    why: 'Маржа ниже целевого уровня, поэтому сначала нужен пересчет ставки.',
+  },
+  {
+    state: 'low_margin_blocked',
+    action: 'reprice_deal',
+    escalation: 'owner_escalation',
+    priority: 96,
+    why: 'Маржа ниже допустимого порога, решение требует пересчета и управленческого контроля.',
+  },
+  {
+    state: 'negative_margin_blocked',
+    action: 'stop_deal',
+    escalation: 'owner_escalation',
+    priority: 100,
+    why: 'Сделка уходит в отрицательную маржу, стандартная обработка запрещена.',
+  },
+  {
+    state: 'blacklist_blocked',
+    action: 'stop_deal',
+    escalation: 'owner_escalation',
+    priority: 100,
+    why: 'Клиент в стоп-контуре, обещания и коммиты должны быть заблокированы.',
+  },
 ];
 
 function getEffectivenessBonus(actionEffectiveness) {
@@ -94,10 +136,10 @@ function getExtractionGuardPenalty(opportunityState, actionCode) {
   if (['send_offer', 'send_contract', 'reserve_own_equipment', 'cross_sell_offer', 'competitor_attack'].includes(actionCode)) {
     return 18;
   }
-  if (['sales_call', 'request_subrent', 'reprice_deal'].includes(actionCode)) {
+  if (['sales_call', 'request_subrent', 'reprice_deal', 'follow_up_reminder', 'clarify_object_access'].includes(actionCode)) {
     return 8;
   }
-  if (actionCode === 'clarify_specs') {
+  if (['clarify_specs', 'clarify_object_access'].includes(actionCode)) {
     return -6;
   }
 

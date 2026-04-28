@@ -59,6 +59,7 @@ function mapOpportunityRow(row, communicationEvents = []) {
           resolved_entity_id: `equipment_type:${row.equipment_type_code}`,
         }
       : null,
+    equipment_model: row.equipment_model ?? null,
     time_window: {
       start_at: row.requested_start_at,
       duration_days: row.requested_duration_days,
@@ -68,6 +69,15 @@ function mapOpportunityRow(row, communicationEvents = []) {
     commercial_stage: row.commercial_stage,
     payment_readiness: row.payment_readiness,
     technical_requirements: row.technical_requirements ?? [],
+    work_conditions: row.work_conditions_json ?? [],
+    price_context: row.price_context_json ?? null,
+    client_expected_next_step: row.client_expected_next_step ?? null,
+    geo_hint: row.geo_hint_json ?? null,
+    readiness_signals: row.readiness_signals_json ?? {
+      contract_ready: false,
+      payment_ready: false,
+      urgency_high: false,
+    },
     economic_assessment: {
       expected_margin_percent: row.expected_margin_percent !== null ? Number(row.expected_margin_percent) : null,
       own_equipment_available: row.own_equipment_available,
@@ -139,6 +149,7 @@ function roundRate(value) {
 
 let auditSchemaEnsured = false;
 let normalizationDecisionSchemaEnsured = false;
+let opportunityEnrichmentSchemaEnsured = false;
 
 async function ensureAuditSchema() {
   if (auditSchemaEnsured) return;
@@ -178,6 +189,22 @@ async function ensureNormalizationDecisionSchema() {
   normalizationDecisionSchemaEnsured = true;
 }
 
+async function ensureOpportunityEnrichmentSchema() {
+  if (opportunityEnrichmentSchemaEnsured) return;
+
+  await query(`
+    ALTER TABLE opportunities
+    ADD COLUMN IF NOT EXISTS equipment_model TEXT,
+    ADD COLUMN IF NOT EXISTS work_conditions_json JSONB,
+    ADD COLUMN IF NOT EXISTS price_context_json JSONB,
+    ADD COLUMN IF NOT EXISTS client_expected_next_step TEXT,
+    ADD COLUMN IF NOT EXISTS geo_hint_json JSONB,
+    ADD COLUMN IF NOT EXISTS readiness_signals_json JSONB
+  `);
+
+  opportunityEnrichmentSchemaEnsured = true;
+}
+
 async function listAcceptedNormalizationAliases() {
   await ensureNormalizationDecisionSchema();
   const { rows } = await query(
@@ -211,6 +238,7 @@ function matchAcceptedAlias(aliases, entityKind, leftValue, rightValue) {
 }
 
 async function fetchOpportunityRows(optionalExternalId = null) {
+  await ensureOpportunityEnrichmentSchema();
   const conditions = optionalExternalId ? 'WHERE o.external_opportunity_id = $1 OR o.id::text = $1' : '';
   const params = optionalExternalId ? [optionalExternalId] : [];
 
@@ -606,21 +634,27 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
         person_id = COALESCE(person_id, $3),
         project_object_id = COALESCE(project_object_id, $4),
         equipment_type_id = COALESCE(equipment_type_id, $5),
-        decision_access_status = COALESCE(decision_access_status, $6),
-        commercial_stage = COALESCE(commercial_stage, $7),
-        payment_readiness = COALESCE(payment_readiness, $8),
-        requested_start_at = COALESCE(requested_start_at, $9),
-        requested_duration_days = COALESCE(requested_duration_days, $10),
-        next_step_code = COALESCE(next_step_code, $11),
-        next_step_due_at = COALESCE(next_step_due_at, $12),
-        next_step_description = COALESCE(next_step_description, $13),
-        last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($14, '-infinity'::timestamptz)),
-        subrent_required = COALESCE(subrent_required, $15),
-        credit_limit_blocked = COALESCE(credit_limit_blocked, $16),
+        equipment_model = COALESCE(equipment_model, $6),
+        decision_access_status = COALESCE(decision_access_status, $7),
+        commercial_stage = COALESCE(commercial_stage, $8),
+        payment_readiness = COALESCE(payment_readiness, $9),
+        requested_start_at = COALESCE(requested_start_at, $10),
+        requested_duration_days = COALESCE(requested_duration_days, $11),
+        next_step_code = COALESCE(next_step_code, $12),
+        next_step_due_at = COALESCE(next_step_due_at, $13),
+        next_step_description = COALESCE(next_step_description, $14),
+        last_touch_at = GREATEST(COALESCE(last_touch_at, '-infinity'::timestamptz), COALESCE($15, '-infinity'::timestamptz)),
+        subrent_required = COALESCE(subrent_required, $16),
+        credit_limit_blocked = COALESCE(credit_limit_blocked, $17),
         debt_overdue_days = CASE
-          WHEN $17 THEN GREATEST(COALESCE(debt_overdue_days, 0), 1)
+          WHEN $18 THEN GREATEST(COALESCE(debt_overdue_days, 0), 1)
           ELSE debt_overdue_days
         END,
+        work_conditions_json = COALESCE(work_conditions_json, $19::jsonb),
+        price_context_json = COALESCE(price_context_json, $20::jsonb),
+        client_expected_next_step = COALESCE(client_expected_next_step, $21),
+        geo_hint_json = COALESCE(geo_hint_json, $22::jsonb),
+        readiness_signals_json = COALESCE(readiness_signals_json, $23::jsonb),
         updated_at = NOW()
       WHERE id = $1
     `,
@@ -630,6 +664,7 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
       personId,
       projectObjectId,
       equipmentTypeId,
+      patch.equipment_model ?? null,
       patch.decision_access_status ?? null,
       patch.commercial_stage ?? null,
       patch.payment_readiness ?? null,
@@ -642,6 +677,11 @@ async function enrichOpportunityFromCommunicationPatch(client, opportunityId, pa
       patch.subrent_required ?? null,
       patch.credit_limit_blocked ?? null,
       patch.debt_risk_flag === true,
+      JSON.stringify(patch.work_conditions ?? []),
+      patch.price_context ? JSON.stringify(patch.price_context) : null,
+      patch.client_expected_next_step ?? null,
+      patch.geo_hint ? JSON.stringify(patch.geo_hint) : null,
+      patch.readiness_signals ? JSON.stringify(patch.readiness_signals) : null,
     ],
   );
 
@@ -1665,6 +1705,7 @@ export class PostgresOpportunityRepository {
   }
 
   async processPendingIngestEvents(limit = 50) {
+    await ensureOpportunityEnrichmentSchema();
     const pending = await this.listPendingIngestEvents(limit);
     const processed = [];
 
@@ -1985,6 +2026,7 @@ export class PostgresOpportunityRepository {
               person_id,
               project_object_id,
               equipment_type_id,
+              equipment_model,
               owner_manager_id,
               commercial_scenario,
               decision_access_status,
@@ -1992,6 +2034,11 @@ export class PostgresOpportunityRepository {
               payment_readiness,
               requested_start_at,
               requested_duration_days,
+              work_conditions_json,
+              price_context_json,
+              client_expected_next_step,
+              geo_hint_json,
+              readiness_signals_json,
               expected_margin_percent,
               own_equipment_available,
               subrent_required,
@@ -2011,8 +2058,9 @@ export class PostgresOpportunityRepository {
             )
             VALUES (
               $1, $2, 'qualified', $3, $4, $5, $6, $7, $8, $9, $10, $11,
-              $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
-              $24, $25, $26, $27, $28, $29
+              $12, $13, $14::jsonb, $15::jsonb, $16, $17::jsonb, $18::jsonb,
+              $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+              $31, $32, $33, $34, $35
             )
             ON CONFLICT (external_opportunity_id)
             DO UPDATE SET
@@ -2020,6 +2068,7 @@ export class PostgresOpportunityRepository {
               person_id = EXCLUDED.person_id,
               project_object_id = EXCLUDED.project_object_id,
               equipment_type_id = EXCLUDED.equipment_type_id,
+              equipment_model = EXCLUDED.equipment_model,
               owner_manager_id = EXCLUDED.owner_manager_id,
               commercial_scenario = EXCLUDED.commercial_scenario,
               decision_access_status = EXCLUDED.decision_access_status,
@@ -2027,6 +2076,11 @@ export class PostgresOpportunityRepository {
               payment_readiness = EXCLUDED.payment_readiness,
               requested_start_at = EXCLUDED.requested_start_at,
               requested_duration_days = EXCLUDED.requested_duration_days,
+              work_conditions_json = EXCLUDED.work_conditions_json,
+              price_context_json = EXCLUDED.price_context_json,
+              client_expected_next_step = EXCLUDED.client_expected_next_step,
+              geo_hint_json = EXCLUDED.geo_hint_json,
+              readiness_signals_json = EXCLUDED.readiness_signals_json,
               expected_margin_percent = EXCLUDED.expected_margin_percent,
               own_equipment_available = EXCLUDED.own_equipment_available,
               subrent_required = EXCLUDED.subrent_required,
@@ -2053,6 +2107,7 @@ export class PostgresOpportunityRepository {
             personId,
             projectObjectId,
             equipmentTypeId,
+            patch.equipment_model ?? null,
             ownerManagerId,
             patch.commercial_scenario ?? null,
             patch.decision_access_status ?? null,
@@ -2060,6 +2115,11 @@ export class PostgresOpportunityRepository {
             patch.payment_readiness ?? null,
             patch.requested_start_at ?? null,
             patch.requested_duration_days ?? null,
+            JSON.stringify(patch.work_conditions ?? []),
+            patch.price_context ? JSON.stringify(patch.price_context) : null,
+            patch.client_expected_next_step ?? null,
+            patch.geo_hint ? JSON.stringify(patch.geo_hint) : null,
+            patch.readiness_signals ? JSON.stringify(patch.readiness_signals) : null,
             patch.expected_margin_percent ?? null,
             patch.own_equipment_available ?? null,
             patch.subrent_required ?? null,

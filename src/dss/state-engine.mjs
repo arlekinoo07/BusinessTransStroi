@@ -102,6 +102,7 @@ function scoreFit(opportunity) {
   let score = 0.5;
   if (opportunity.economic_assessment?.own_equipment_available) score += 2.5;
   if (opportunity.economic_assessment?.expected_margin_percent >= 25) score += 1.5;
+  if (opportunity.economic_assessment?.expected_margin_percent >= 15 && opportunity.economic_assessment?.expected_margin_percent < 25) score += 0.75;
   if (opportunity.economic_assessment?.subrent_required) score -= 0.5;
   if (opportunity.financial_risk?.client_blacklisted) score = 0;
   return clampScore(score);
@@ -180,6 +181,8 @@ export function evaluateOpportunityState(opportunity) {
   const ownEquipmentAvailable = opportunity.economic_assessment?.own_equipment_available === true;
   const subrentRequired = opportunity.economic_assessment?.subrent_required === true;
   const debtRiskDetected = (opportunity.financial_risk?.debt_overdue_days ?? 0) > 0 || opportunity.financial_risk?.credit_limit_blocked;
+  const expectedMargin = opportunity.economic_assessment?.expected_margin_percent ?? null;
+  const accessUnknown = !opportunity.project_object?.normalized_value && opportunity.address?.normalized_value;
 
   if (scores.need >= 4 && scores.time >= 4 && scores.money >= 3 && !confidence.has_critical_gap) {
     addState(states, 'hot_urgent', 'Потребность конкретная, окно мобилизации близко, клиент дошел до коммерческой стадии.', 0.88);
@@ -222,6 +225,10 @@ export function evaluateOpportunityState(opportunity) {
     addState(states, 'spec_missing', 'Не хватает технической конкретики для уверенной обработки.', 0.83);
   }
 
+  if (accessUnknown) {
+    addState(states, 'object_access_unclear', 'Есть адрес или контур объекта, но объект/условия доступа определены нечетко.', 0.7);
+  }
+
   if (scores.need < 2 && scores.spec < 2 && scores.time < 2) {
     addState(states, 'noise_low_priority', 'Сделка пока шумовая и не готова к активной обработке.', 0.76);
   }
@@ -242,6 +249,18 @@ export function evaluateOpportunityState(opportunity) {
 
   if (opportunity.next_step?.due_at && new Date(opportunity.next_step.due_at).getTime() < Date.now()) {
     addState(states, 'manager_promise_overdue', 'Обещанный follow-up просрочен.', 0.93);
+  }
+
+  if (expectedMargin !== null && expectedMargin < 0) {
+    addState(states, 'negative_margin_blocked', 'У сделки отрицательная ожидаемая маржа, работу нужно блокировать.', 0.97);
+  } else if (expectedMargin !== null && expectedMargin < 12) {
+    addState(states, 'low_margin_blocked', 'Маржа ниже допустимого порога для стандартной обработки.', 0.88);
+  } else if (expectedMargin !== null && expectedMargin < 20) {
+    addState(states, 'low_margin_warning', 'Маржа ниже целевого уровня, нужен пересчет ставки.', 0.72);
+  }
+
+  if (opportunity.financial_risk?.client_blacklisted) {
+    addState(states, 'blacklist_blocked', 'Клиент или объект в стоп-контуре, сделку нельзя вести в штатном режиме.', 0.99);
   }
 
   return {

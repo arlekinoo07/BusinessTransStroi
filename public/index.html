@@ -260,8 +260,23 @@
               <p class="panel-kicker">System Status</p>
               <h2>Состояние контуров и сервиса</h2>
             </div>
+            <div class="queue-controls">
+              <button id="syncVectorsButton" class="button button-secondary">Sync Qdrant</button>
+              <button id="syncGraphButton" class="button button-secondary">Sync Neo4j</button>
+            </div>
           </div>
           <div id="systemStatusSummary" class="hero-stats"></div>
+        </section>
+
+        <section class="panel panel-quality">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Reference Layer</p>
+              <h2>Справочники и доменные словари</h2>
+            </div>
+          </div>
+          <div id="dictionarySummary" class="hero-stats"></div>
+          <div id="dictionaryList" class="queue-list"></div>
         </section>
       </main>
     </div>

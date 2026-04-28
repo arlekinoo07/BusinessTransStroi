@@ -3,6 +3,8 @@ const els = {
   loadFirstCard: document.querySelector('#loadFirstCard'),
   processIngestButton: document.querySelector('#processIngestButton'),
   retryIngestButton: document.querySelector('#retryIngestButton'),
+  syncVectorsButton: document.querySelector('#syncVectorsButton'),
+  syncGraphButton: document.querySelector('#syncGraphButton'),
   loadCardButton: document.querySelector('#loadCardButton'),
   queueLimit: document.querySelector('#queueLimit'),
   queueBucket: document.querySelector('#queueBucket'),
@@ -30,6 +32,8 @@ const els = {
   ownerSummary: document.querySelector('#ownerSummary'),
   ownerList: document.querySelector('#ownerList'),
   systemStatusSummary: document.querySelector('#systemStatusSummary'),
+  dictionarySummary: document.querySelector('#dictionarySummary'),
+  dictionaryList: document.querySelector('#dictionaryList'),
   cardView: document.querySelector('#cardView'),
   pendingList: document.querySelector('#pendingList'),
   errorList: document.querySelector('#errorList'),
@@ -441,6 +445,7 @@ function renderSystemStatus(payload) {
 function renderQualityDashboard(payload) {
   const summary = payload.summary ?? {};
   const criticalFields = summary.critical_fields ?? [];
+  const thresholdChecks = summary.threshold_checks ?? [];
   const issueBreakdown = summary.issue_breakdown ?? [];
   els.qualitySummary.innerHTML = `
     <div class="stat-card">
@@ -454,6 +459,18 @@ function renderQualityDashboard(payload) {
     <div class="stat-card">
       <span class="stat-label">Normalized Objects</span>
       <strong>${summary.normalized_objects_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Opp Unit Linked</span>
+      <strong>${summary.linked_opportunity_unit_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Competitor Confidence</span>
+      <strong>${summary.competitor_confidence_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Execution Log</span>
+      <strong>${summary.execution_log_percent ?? 0}%</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">No Next Step</span>
@@ -515,6 +532,21 @@ function renderQualityDashboard(payload) {
       </article>
     `
     : '';
+  const thresholdChecksHtml = thresholdChecks.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Threshold Checks</h3>
+            <div class="queue-subtitle">Контроль целевых метрик качества данных по ТЗ</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${thresholdChecks.map((item) => `<span class="badge badge-${item.status === 'ok' ? 'low' : item.status === 'warning' ? 'high' : 'critical'}">${item.code}: ${item.actual_percent}% / ${item.target_percent}%</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
   const issueBreakdownHtml = issueBreakdown.length
     ? `
       <article class="queue-item">
@@ -532,11 +564,11 @@ function renderQualityDashboard(payload) {
     : '';
 
   if (!items.length) {
-    els.qualityList.innerHTML = `${criticalFieldsHtml}${issueBreakdownHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
+    els.qualityList.innerHTML = `${criticalFieldsHtml}${thresholdChecksHtml}${issueBreakdownHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
     return;
   }
 
-  els.qualityList.innerHTML = criticalFieldsHtml + issueBreakdownHtml + items.slice(0, 8).map((item) => `
+  els.qualityList.innerHTML = criticalFieldsHtml + thresholdChecksHtml + issueBreakdownHtml + items.slice(0, 8).map((item) => `
     <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
       <div class="queue-top">
         <div>
@@ -723,6 +755,50 @@ function renderAuditLogs(items) {
   `).join('');
 }
 
+function renderDictionaries(payload) {
+  const actionLibrary = payload.action_library ?? [];
+  const summaryItems = [
+    ['Action Library', actionLibrary.length],
+    ['Equipment Types', (payload.equipment_types ?? []).length],
+    ['Equipment Models', (payload.equipment_models ?? []).length],
+    ['Own Units', (payload.own_equipment_units ?? []).length],
+    ['Partners', (payload.subrent_partners ?? []).length],
+    ['Competitors', (payload.competitors ?? []).length],
+    ['Object Types', (payload.object_types ?? []).length],
+    ['Stop Signals', (payload.stop_signals ?? []).length],
+  ];
+
+  els.dictionarySummary.innerHTML = summaryItems.map(([label, value]) => `
+    <div class="stat-card">
+      <span class="stat-label">${label}</span>
+      <strong>${value}</strong>
+    </div>
+  `).join('');
+
+  const sections = [
+    ['Action Library', actionLibrary.map((item) => `${item.action_code} -> ${item.target_role}`)],
+    ['Equipment Types', payload.equipment_types ?? []],
+    ['Subrent Partners', (payload.subrent_partners ?? []).map((item) => `${item.name} (${item.region}, rel ${Math.round((item.reliability ?? 0) * 100)}%)`)],
+    ['Competitors', (payload.competitors ?? []).map((item) => `${item.name} (${Math.round((item.confidence_level ?? 0) * 100)}%)`)],
+    ['Maturity Markers', payload.maturity_markers ?? []],
+    ['Stop Signals', payload.stop_signals ?? []],
+  ];
+
+  els.dictionaryList.innerHTML = sections.map(([title, items]) => `
+    <article class="queue-item">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${title}</h3>
+          <div class="queue-subtitle">Reference data for DSS logic</div>
+        </div>
+      </div>
+      <div class="badge-row">
+        ${(items ?? []).slice(0, 12).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">empty</span>'}
+      </div>
+    </article>
+  `).join('');
+}
+
 function renderDetailRows(details) {
   return Object.entries(details).map(([label, value]) => `
     <div class="detail-row">
@@ -877,6 +953,49 @@ function renderExtractionQuality(quality) {
         <strong>Field Confidence</strong>
         <div class="badge-row">
           ${confidenceEntries.map(([key, value]) => `<span class="badge badge-low">${key}: ${Math.round(value * 100)}%</span>`).join('') || '<span class="badge badge-low">no confidence data</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEnrichedContext(context) {
+  if (!context) {
+    return '<div class="empty">Дополнительный контекст пока не собран.</div>';
+  }
+
+  const readinessEntries = Object.entries(context.readiness_signals ?? {});
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Equipment / Geo</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">model: ${context.equipment_model ?? '—'}</span>
+          <span class="badge badge-low">geo: ${context.geo_hint?.normalized_value ?? context.geo_hint?.raw_value ?? '—'}</span>
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Client Expectation</strong>
+        <div>${context.client_expected_next_step ?? '—'}</div>
+      </div>
+      <div class="history-item">
+        <strong>Price Context</strong>
+        <div>${context.price_context?.raw_value ?? '—'}</div>
+        <div class="badge-row">
+          ${(context.price_context?.markers ?? []).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">no price markers</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Work Conditions</strong>
+        <div class="badge-row">
+          ${(context.work_conditions ?? []).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">no work conditions</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Readiness Signals</strong>
+        <div class="badge-row">
+          ${readinessEntries.map(([key, value]) => `<span class="badge ${value ? 'badge-high' : 'badge-low'}">${key}: ${value ? 'yes' : 'no'}</span>`).join('') || '<span class="badge badge-low">no readiness signals</span>'}
         </div>
       </div>
     </div>
@@ -1091,6 +1210,11 @@ function renderCard(card) {
         <p class="panel-kicker">Extraction Quality</p>
         <h3>Насколько уверенно система поняла коммуникации</h3>
         ${renderExtractionQuality(card.extraction_quality)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Enriched Context</p>
+        <h3>Что еще система вытащила из коммуникаций</h3>
+        ${renderEnrichedContext(card.enriched_context)}
       </section>
       <section class="card-section full">
         <p class="panel-kicker">Why Not Now / Stop Signals</p>
@@ -1318,6 +1442,12 @@ async function loadSystemStatus() {
   return payload;
 }
 
+async function loadDictionaries() {
+  const payload = await api('/meta/dictionaries');
+  renderDictionaries(payload);
+  return payload;
+}
+
 async function refreshAll() {
   try {
     await loadAuthMe();
@@ -1330,6 +1460,7 @@ async function refreshAll() {
       loadLogisticsDashboard(),
       loadOwnerDashboard(),
       loadSystemStatus(),
+      loadDictionaries(),
     ]);
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {
@@ -1381,6 +1512,22 @@ els.retryIngestButton.addEventListener('click', async () => {
       limit: 100,
       process_after_retry: true,
     }),
+  });
+  await refreshAll();
+});
+els.syncVectorsButton.addEventListener('click', async () => {
+  await api('/vectors/index', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  await refreshAll();
+});
+els.syncGraphButton.addEventListener('click', async () => {
+  await api('/graph/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
   await refreshAll();
 });

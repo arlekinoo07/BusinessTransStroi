@@ -22,10 +22,37 @@ const EQUIPMENT_ALIASES = new Map([
   ['бульдозер', 'Бульдозер'],
 ]);
 
+const NOISE_SEGMENTS = [
+  'следующий шаг',
+  'клиент просит',
+  'клиент готов',
+  'контакт',
+  'адрес',
+  'техника',
+  'priority score',
+  'need score',
+  'time score',
+  'spec score',
+  'access score',
+  'money score',
+  'fit score',
+];
+
 function cleanupText(value) {
   return String(value ?? '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function trimNoiseTail(value) {
+  const raw = cleanupText(value);
+  if (!raw) return raw;
+  const lowered = raw.toLowerCase();
+  const indexes = NOISE_SEGMENTS
+    .map((segment) => lowered.indexOf(segment))
+    .filter((index) => index > 0);
+  if (!indexes.length) return raw;
+  return raw.slice(0, Math.min(...indexes)).trim();
 }
 
 function normalizeToken(value) {
@@ -212,7 +239,7 @@ export function findContextualDuplicateCandidates(items, {
 }
 
 export function normalizeCompanyName(rawValue) {
-  const raw = cleanupText(rawValue);
+  const raw = trimNoiseTail(rawValue);
   const normalized = normalizeToken(raw)
     .split(' ')
     .filter((token) => token && !COMPANY_SUFFIXES.includes(token))
@@ -227,7 +254,11 @@ export function normalizeCompanyName(rawValue) {
 }
 
 export function normalizeObjectName(rawValue) {
-  const raw = cleanupText(rawValue);
+  const raw = trimNoiseTail(rawValue)
+    .replace(/\bконтакт\s*:\s*.*$/i, '')
+    .replace(/\bадрес\s*:\s*.*$/i, '')
+    .replace(/\bтехника\s*:\s*.*$/i, '')
+    .trim();
   const normalized = normalizeObjectMarkers(raw);
 
   return {
@@ -239,7 +270,7 @@ export function normalizeObjectName(rawValue) {
 }
 
 export function normalizeAddress(rawValue) {
-  const raw = cleanupText(rawValue);
+  const raw = trimNoiseTail(rawValue);
   const normalized = normalizeAddressMarkers(raw);
 
   return {
@@ -251,7 +282,9 @@ export function normalizeAddress(rawValue) {
 }
 
 export function normalizeEquipmentType(rawValue) {
-  const raw = cleanupText(rawValue);
+  const raw = trimNoiseTail(rawValue)
+    .replace(/\bследующий шаг\s*:\s*.*$/i, '')
+    .trim();
   const normalizedToken = normalizeToken(raw);
 
   for (const [alias, canonical] of EQUIPMENT_ALIASES.entries()) {
@@ -274,7 +307,7 @@ export function normalizeEquipmentType(rawValue) {
 }
 
 export function normalizePersonName(rawValue) {
-  const raw = cleanupText(rawValue);
+  const raw = trimNoiseTail(rawValue);
   const normalized = normalizeToken(raw);
 
   return {

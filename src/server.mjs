@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
 import { getContractsOverview } from './dss/contracts.mjs';
+import { getDictionariesOverview } from './dss/dictionaries.mjs';
 import { adaptBitrixWebhookPayload } from './bitrix-webhook-adapter.mjs';
 import { decideNextAction } from './dss/decision-engine.mjs';
 import { extractEntitiesFromText } from './dss/nlp-extraction.mjs';
@@ -16,9 +17,11 @@ import {
   getNeo4jStatus,
   getObjectGraphFromNeo4j,
   getOpportunityGraphFromNeo4j,
+  syncRepositoryToNeo4j,
 } from './services/neo4j-graph-service.mjs';
 import { createRepository } from './repositories/opportunity-repository.mjs';
 import { getQdrantStatus } from './services/qdrant-vector-service.mjs';
+import { syncRepositoryToQdrant } from './services/qdrant-vector-service.mjs';
 import { getSimilarCases } from './services/similar-cases-service.mjs';
 import { evaluateOpportunityState } from './dss/state-engine.mjs';
 import { hasPostgresConfig, query as pgQuery } from './db/postgres.mjs';
@@ -598,6 +601,12 @@ function buildExtractionQuality(opportunity) {
     decision_access: avg(extractedSignalConfidence.decision_access),
     competitor: avg(extractedSignalConfidence.competitor),
     debt_risk: avg(extractedSignalConfidence.debt_risk),
+    price: avg(extractionEvents
+      .map((item) => item.price_context?.confidence)
+      .filter((value) => value !== null && value !== undefined)),
+    geo: avg(extractionEvents
+      .map((item) => item.geo_hint?.confidence)
+      .filter((value) => value !== null && value !== undefined)),
   };
 
   const lowConfidenceFields = Object.entries(fieldConfidence)
@@ -1164,6 +1173,14 @@ export async function buildOpportunityCard(opportunityId) {
       support_markers: decisionSupportMarkers,
     },
     communication_history: (opportunity.communication_events ?? []).slice(0, 12),
+    enriched_context: {
+      equipment_model: opportunity.equipment_model ?? null,
+      work_conditions: opportunity.work_conditions ?? [],
+      price_context: opportunity.price_context ?? null,
+      client_expected_next_step: opportunity.client_expected_next_step ?? null,
+      geo_hint: opportunity.geo_hint ?? null,
+      readiness_signals: opportunity.readiness_signals ?? {},
+    },
     risk_evidence: riskEvidence,
     extraction_quality: extractionQuality,
     stop_signals: stopSignals,
@@ -1359,10 +1376,19 @@ export async function buildDataQualityDashboard() {
   const opportunitiesWithIngestRisk = ingestIssueMap.size;
   const opportunitiesWithConfidenceGuard = opportunities.filter((item) =>
     evaluateOpportunityState(item).states.some((state) => state.state_code === 'extraction_low_confidence')).length;
+  const opportunitiesLinkedToUnit = opportunities.filter((item) =>
+    item.company?.normalized_value
+    && item.project_object?.normalized_value
+    && item.equipment_type?.normalized_value).length;
   const linkedEventsCount = opportunities.filter((item) => (item.communication_events ?? []).length > 0).length;
   const normalizedObjectsCount = opportunities.filter((item) => item.project_object?.normalized_value).length;
   const withoutNextStep = opportunities.filter((item) => !item.next_step?.code && !item.next_step?.description).length;
   const missingEquipment = opportunities.filter((item) => !item.equipment_type?.normalized_value).length;
+  const competitorSignals = opportunities.filter((item) => item.graph_signals?.competitor_present).length;
+  const competitorWithConfidence = opportunities.filter((item) =>
+    (item.communication_events ?? []).some((event) => (event.extraction_json?.competitor?.confidence ?? 0) > 0)).length;
+  const actionsWithExecutionLog = opportunities.filter((item) =>
+    Array.isArray(item.communication_events) && item.communication_events.length > 0).length;
   const coverageMetrics = [
     {
       field_code: 'client',
@@ -1459,6 +1485,9 @@ export async function buildDataQualityDashboard() {
       total_opportunities: opportunities.length,
       linked_events_percent: Math.round((linkedEventsCount / totalOpportunities) * 100),
       normalized_objects_percent: Math.round((normalizedObjectsCount / totalOpportunities) * 100),
+      linked_opportunity_unit_percent: Math.round((opportunitiesLinkedToUnit / totalOpportunities) * 100),
+      competitor_confidence_percent: competitorSignals ? Math.round((competitorWithConfidence / competitorSignals) * 100) : 100,
+      execution_log_percent: Math.round((actionsWithExecutionLog / totalOpportunities) * 100),
       opportunities_without_next_step: withoutNextStep,
       opportunities_missing_equipment: missingEquipment,
       failed_ingest_events: ingestFailedCount,
@@ -1468,6 +1497,31 @@ export async function buildDataQualityDashboard() {
       opportunities_with_ingest_risk: opportunitiesWithIngestRisk,
       confidence_guard_events: opportunitiesWithConfidenceGuard,
       normalization_records: normalizationResults.length,
+      threshold_checks: [
+        {
+          code: 'opportunity_unit_link_rate',
+          actual_percent: Math.round((opportunitiesLinkedToUnit / totalOpportunities) * 100),
+          target_percent: 90,
+        },
+        {
+          code: 'normalized_objects_rate',
+          actual_percent: Math.round((normalizedObjectsCount / totalOpportunities) * 100),
+          target_percent: 85,
+        },
+        {
+          code: 'competitor_confidence_rate',
+          actual_percent: competitorSignals ? Math.round((competitorWithConfidence / competitorSignals) * 100) : 100,
+          target_percent: 80,
+        },
+        {
+          code: 'action_execution_log_rate',
+          actual_percent: Math.round((actionsWithExecutionLog / totalOpportunities) * 100),
+          target_percent: 95,
+        },
+      ].map((item) => ({
+        ...item,
+        status: item.actual_percent >= item.target_percent ? 'ok' : item.actual_percent >= item.target_percent - 15 ? 'warning' : 'critical',
+      })),
       critical_fields: coverageMetrics,
       issue_breakdown: issueBreakdown,
     },
@@ -1731,12 +1785,39 @@ export function createAppServer() {
         return sendJson(response, 200, getContractsOverview());
       }
 
+      if (request.method === 'GET' && url.pathname === '/meta/dictionaries') {
+        return sendJson(response, 200, getDictionariesOverview());
+      }
+
       if (request.method === 'GET' && url.pathname === '/vectors/status') {
         return sendJson(response, 200, await getQdrantStatus());
       }
 
       if (request.method === 'GET' && url.pathname === '/graph/status') {
         return sendJson(response, 200, await getNeo4jStatus());
+      }
+
+      if (request.method === 'POST' && url.pathname === '/graph/sync') {
+        const denied = requirePermission(auth, 'dashboard.data_quality');
+        if (denied) return sendJson(response, 403, denied);
+        const result = await syncRepositoryToNeo4j(repository);
+        await writeAuditLog(auth, 'graph_sync', 'graph_index', 'neo4j', {
+          enabled: result.enabled ?? false,
+          database: result.database ?? null,
+          synced_opportunities: result.synced_opportunities ?? 0,
+        }, result.enabled === false ? 'skipped' : 'success');
+        return sendJson(response, 200, result);
+      }
+
+      if (request.method === 'POST' && url.pathname === '/vectors/index') {
+        const denied = requirePermission(auth, 'dashboard.data_quality');
+        if (denied) return sendJson(response, 403, denied);
+        const result = await syncRepositoryToQdrant(repository);
+        await writeAuditLog(auth, 'vectors_index', 'vector_index', 'qdrant', {
+          enabled: result.enabled ?? false,
+          collections: result.collections ?? null,
+        }, result.enabled === false ? 'skipped' : 'success');
+        return sendJson(response, 200, result);
       }
 
       if (request.method === 'GET' && url.pathname.startsWith('/opportunities/')) {
