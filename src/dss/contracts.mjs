@@ -741,6 +741,9 @@ export const systemStatusSchema = {
       type: 'object',
       properties: {
         service: { type: 'string' },
+        app_name: { type: 'string' },
+        app_version: { type: 'string' },
+        git_sha: { type: 'string' },
         environment: { type: 'string' },
         timestamp: { type: 'string', format: 'date-time' },
         started_at: { type: 'string', format: 'date-time' },

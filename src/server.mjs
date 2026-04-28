@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +30,7 @@ const APP_STARTED_AT = new Date().toISOString();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, '../public');
+const packageJsonPath = path.resolve(__dirname, '../package.json');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -37,6 +39,41 @@ const MIME_TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
 };
+
+let appMetadataPromise = null;
+
+function getAppGitSha() {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: path.resolve(__dirname, '..'),
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    return process.env.APP_GIT_SHA ?? 'unknown';
+  }
+}
+
+async function getAppMetadata() {
+  if (!appMetadataPromise) {
+    appMetadataPromise = fs.readFile(packageJsonPath, 'utf8')
+      .then((content) => {
+        const parsed = JSON.parse(content);
+        return {
+          name: parsed.name ?? 'bts-dss',
+          version: parsed.version ?? '0.0.0',
+          git_sha: getAppGitSha(),
+        };
+      })
+      .catch(() => ({
+        name: 'bts-dss',
+        version: 'unknown',
+        git_sha: getAppGitSha(),
+      }));
+  }
+
+  return appMetadataPromise;
+}
 
 function sendJson(response, statusCode, payload, options = {}) {
   response.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -896,13 +933,14 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
 }
 
 export async function buildSystemStatusDashboard() {
-  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics, httpCheck] = await Promise.all([
+  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics, httpCheck, appMetadata] = await Promise.all([
     getQdrantStatus(),
     getNeo4jStatus(),
     repository.listPendingIngestEvents?.(20) ?? [],
     repository.listFailedIngestEvents(50),
     repository.getSystemDiagnostics?.() ?? {},
     checkLocalHttpHealth(),
+    getAppMetadata(),
   ]);
 
   let postgres = {
@@ -970,6 +1008,9 @@ export async function buildSystemStatusDashboard() {
     },
     app: {
       service: 'bts-dss',
+      app_name: appMetadata.name,
+      app_version: appMetadata.version,
+      git_sha: appMetadata.git_sha,
       environment: process.env.NODE_ENV ?? 'development',
       timestamp: new Date().toISOString(),
       started_at: APP_STARTED_AT,

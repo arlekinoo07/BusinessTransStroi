@@ -404,6 +404,14 @@ function renderSystemStatus(payload) {
       <strong>${formatDateTime(app.started_at)}</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Version</span>
+      <strong>${app.app_version ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Git SHA</span>
+      <strong>${app.git_sha ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Service</span>
       <strong>${app.service ?? '—'}</strong>
     </div>
