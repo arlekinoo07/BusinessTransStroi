@@ -272,10 +272,20 @@ export async function getNeo4jStatus() {
 
   try {
     const info = await withSession('READ', async (session) => {
-      const probe = await session.run('RETURN 1 AS ok');
+      const probe = await session.run(`
+        RETURN 1 AS ok,
+          COUNT { MATCH (n) RETURN n } AS nodes_count,
+          COUNT { MATCH ()-[r]-() RETURN r } AS edges_count
+      `);
       const value = probe.records[0]?.get('ok');
       const normalized = typeof value?.toNumber === 'function' ? value.toNumber() : value;
-      return { ok: normalized === 1 };
+      const nodes = probe.records[0]?.get('nodes_count');
+      const edges = probe.records[0]?.get('edges_count');
+      return {
+        ok: normalized === 1,
+        nodes_count: typeof nodes?.toNumber === 'function' ? nodes.toNumber() : nodes,
+        edges_count: typeof edges?.toNumber === 'function' ? edges.toNumber() : edges,
+      };
     });
 
     return {
@@ -283,6 +293,8 @@ export async function getNeo4jStatus() {
       configured: true,
       database: NEO4J_DATABASE,
       reachable: Boolean(info?.ok),
+      nodes_count: info?.nodes_count ?? 0,
+      edges_count: info?.edges_count ?? 0,
     };
   } catch (error) {
     return {
@@ -320,6 +332,10 @@ export async function getOpportunityGraphFromNeo4j(opportunityId) {
       nodes: mapped.nodes,
       edges: mapped.edges,
       source: 'neo4j',
+      summary: {
+        nodes_count: mapped.nodes.length,
+        edges_count: mapped.edges.length,
+      },
     };
   });
 }
@@ -352,6 +368,10 @@ export async function getObjectGraphFromNeo4j(objectId) {
           nodes: mapped.nodes,
           edges: mapped.edges,
           source: 'neo4j',
+          summary: {
+            nodes_count: mapped.nodes.length,
+            edges_count: mapped.edges.length,
+          },
         };
       }
     }

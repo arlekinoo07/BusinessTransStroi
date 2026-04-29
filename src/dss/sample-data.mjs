@@ -27,6 +27,7 @@ export const opportunityStore = new Map([
     project_object: extracted.project_object,
     address: extracted.address,
     equipment_type: extracted.equipment_type,
+    equipment_model: 'Автокран 25т',
     time_window: {
       start_at: new Date(Date.now() + 18 * 3_600_000).toISOString(),
       duration_days: 10,
@@ -36,15 +37,43 @@ export const opportunityStore = new Map([
     commercial_stage: 'contract_requested',
     payment_readiness: 'ready',
     technical_requirements: ['25т', 'вылет стрелы 28м'],
+    work_conditions: ['Ночная смена', 'Пропуск на объект'],
+    price_context: {
+      raw_value: 'Бюджет клиента 145000 руб/смена, готовы обсуждать аванс.',
+      markers: ['бюджет', 'руб', 'аванс'],
+      confidence: 0.82,
+    },
+    client_expected_next_step: 'Ждет договор и подтверждение резерва техники.',
+    geo_hint: extracted.address
+      ? {
+          raw_value: extracted.address.raw_value,
+          normalized_value: extracted.address.normalized_value,
+          confidence: extracted.address.confidence_score,
+        }
+      : null,
+    readiness_signals: {
+      contract_ready: true,
+      payment_ready: true,
+      urgency_high: true,
+    },
     economic_assessment: {
       expected_margin_percent: 29,
       own_equipment_available: true,
       subrent_required: false,
+      expected_revenue_amount: 1450000,
+      own_cost_amount: 980000,
+      subrent_cost_amount: 1180000,
+      mobilization_distance_km: 18,
     },
     financial_risk: {
       debt_overdue_days: 0,
       credit_limit_blocked: false,
       client_blacklisted: false,
+    },
+    owner_manager: {
+      external_id: 'mgr-100',
+      full_name: 'Иван Петров',
+      role_code: 'sales_manager',
     },
     graph_signals: {
       cross_sell_open: true,
@@ -97,6 +126,7 @@ export const opportunityStore = new Map([
       confidence_score: 0.92,
       resolved_entity_id: 'equipment_type:манипулятор',
     },
+    equipment_model: 'Манипулятор 10т',
     time_window: {
       start_at: new Date(Date.now() + 48 * 3_600_000).toISOString(),
       duration_days: 3,
@@ -104,17 +134,43 @@ export const opportunityStore = new Map([
     commercial_scenario: 'subrent_support',
     decision_access_status: 'influencer',
     commercial_stage: 'offer_requested',
-    payment_readiness: 'early',
-    technical_requirements: [],
+    payment_readiness: 'commercial',
+    technical_requirements: ['длина борта 6м'],
+    work_conditions: ['Стесненные условия', 'Заезд только утром'],
+    price_context: {
+      raw_value: 'Клиент жалуется, что у конкурента дешевле на 12%.',
+      markers: ['дешевле', 'цена'],
+      confidence: 0.77,
+    },
+    client_expected_next_step: 'Ждет уточнение цены и доступности субаренды.',
+    geo_hint: {
+      raw_value: 'МО, Южный кластер',
+      normalized_value: 'мо южный кластер',
+      confidence: 0.62,
+    },
+    readiness_signals: {
+      contract_ready: false,
+      payment_ready: false,
+      urgency_high: true,
+    },
     economic_assessment: {
       expected_margin_percent: 8,
       own_equipment_available: false,
       subrent_required: true,
+      expected_revenue_amount: 420000,
+      own_cost_amount: null,
+      subrent_cost_amount: 386000,
+      mobilization_distance_km: 42,
     },
     financial_risk: {
       debt_overdue_days: 24,
       credit_limit_blocked: false,
       client_blacklisted: false,
+    },
+    owner_manager: {
+      external_id: 'mgr-101',
+      full_name: 'Мария Смирнова',
+      role_code: 'sales_manager',
     },
     graph_signals: {
       cross_sell_open: false,

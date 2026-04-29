@@ -220,9 +220,19 @@ function renderLogisticsQueue(items) {
       <div class="queue-meta">
         <span class="pill">Техника: ${item.equipment_type ?? '—'}</span>
         <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
+        <span class="pill">Маржа: ${item.margin_pressure ?? '—'}</span>
+        <span class="pill">Mode: ${item.economics_mode ?? '—'}</span>
       </div>
       <div class="muted">${item.partner_hint ?? '—'}</div>
       <div class="muted">${item.demand_cluster_hint ?? '—'}</div>
+      <div class="muted">${item.economics_reason ?? '—'}</div>
+      ${(item.reserve_unit || item.recommended_partner) ? `
+        <div class="muted">
+          ${item.reserve_unit ? `Резерв: ${item.reserve_unit.registry_id} · ${item.reserve_unit.model} · ${item.reserve_unit.base_location}` : 'Резерв: —'}
+          ${item.recommended_partner ? ` | Партнер: ${item.recommended_partner.name} · ${item.recommended_partner.reliability_percent}% · ${item.recommended_partner.shoulder_km} км` : ''}
+        </div>
+      ` : ''}
+      <div class="muted">Ожидаемая маржа: ${item.expected_margin_percent ?? '—'}% · Плечо: ${item.mobilization_distance_km ?? '—'} км</div>
       <div class="badge-row">
         ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
       </div>
@@ -255,8 +265,28 @@ function renderOwnerDashboard(payload) {
       <strong>${summary.debt_exposure_share ?? 0}%</strong>
     </div>
     <div class="stat-card">
+      <span class="stat-label">Reserve Coverage</span>
+      <strong>${summary.reserve_coverage_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Partner Coverage</span>
+      <strong>${summary.partner_coverage_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
       <span class="stat-label">Confidence Guard</span>
       <strong>${summary.confidence_guard_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Margin Risk</span>
+      <strong>${summary.margin_risk_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Load Ready</span>
+      <strong>${summary.strategic_load_ready_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Live Support</span>
+      <strong>${summary.live_support_share ?? 0}%</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Avg Margin</span>
@@ -301,8 +331,10 @@ function renderOwnerDashboard(payload) {
       <div class="queue-meta">
         <span class="pill">Маржа: ${item.margin_percent ?? '—'}%</span>
         <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
+        <span class="pill">Pressure: ${item.margin_pressure ?? '—'}</span>
       </div>
       <div class="muted">${item.owner_signal ?? '—'}</div>
+      ${(item.reserve_unit || item.recommended_partner) ? `<div class="muted">Резерв: ${item.reserve_unit ?? '—'} · Партнер: ${item.recommended_partner ?? '—'}</div>` : ''}
       <div class="badge-row">
         <span class="badge badge-low">own: ${item.own_equipment_available ?? '—'}</span>
         <span class="badge badge-low">subrent: ${item.subrent_required ?? '—'}</span>
@@ -328,7 +360,12 @@ function renderSystemStatus(payload) {
   const app = payload.app ?? {};
   const readiness = payload.readiness ?? {};
   const warnings = payload.warnings ?? [];
+  const operationalChecklist = payload.operational_checklist ?? [];
   const overallState = payload.overall_state ?? 'unknown';
+  const qdrantCollections = qdrant.collections ?? [];
+  const qdrantCollectionsLabel = qdrantCollections.length
+    ? qdrantCollections.map((item) => `${item.key}:${item.exists ? item.points_count ?? 0 : 'off'}`).join(', ')
+    : '—';
 
   els.systemStatusSummary.innerHTML = `
     <div class="stat-card">
@@ -337,7 +374,7 @@ function renderSystemStatus(payload) {
     </div>
     <div class="stat-card">
       <span class="stat-label">Readiness</span>
-      <strong>${readiness.state ?? 'unknown'}</strong>
+      <strong>${readiness.level ?? readiness.state ?? 'unknown'}</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Liveness</span>
@@ -349,11 +386,19 @@ function renderSystemStatus(payload) {
     </div>
     <div class="stat-card">
       <span class="stat-label">Qdrant</span>
-      <strong>${qdrant.enabled ? 'online' : qdrant.configured ? 'configured' : 'off'}</strong>
+      <strong>${qdrant.reachable ? 'online' : qdrant.configured ? 'configured' : 'off'}</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Neo4j</span>
       <strong>${neo4j.reachable ? 'online' : neo4j.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Qdrant Collections</span>
+      <strong>${qdrantCollectionsLabel}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Neo4j Graph</span>
+      <strong>${neo4j.nodes_count ?? 0}n / ${neo4j.edges_count ?? 0}e</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">Pending Ingest</span>
@@ -440,6 +485,25 @@ function renderSystemStatus(payload) {
       <strong>${warnings.length ? warnings.join(', ') : 'none'}</strong>
     </div>
   `;
+
+  if ((readiness.operational_gaps ?? []).length) {
+    els.systemStatusSummary.innerHTML += `
+      <div class="stat-card">
+        <span class="stat-label">Op Gaps</span>
+        <strong>${readiness.operational_gaps.join(', ')}</strong>
+      </div>
+    `;
+  }
+
+  if (operationalChecklist.length) {
+    els.systemStatusSummary.innerHTML += operationalChecklist.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.code}</span>
+        <strong>${item.status}</strong>
+        <div class="muted">${item.detail ?? '—'}</div>
+      </div>
+    `).join('');
+  }
 }
 
 function renderQualityDashboard(payload) {
@@ -471,6 +535,34 @@ function renderQualityDashboard(payload) {
     <div class="stat-card">
       <span class="stat-label">Execution Log</span>
       <strong>${summary.execution_log_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Client Intent</span>
+      <strong>${summary.client_intent_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Price Context</span>
+      <strong>${summary.price_context_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Logistics Context</span>
+      <strong>${summary.logistics_context_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Geo Hint</span>
+      <strong>${summary.geo_hint_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Payment Readiness</span>
+      <strong>${summary.payment_readiness_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Decision Access</span>
+      <strong>${summary.decision_access_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Next Step Signal</span>
+      <strong>${summary.next_step_signal_percent ?? 0}%</strong>
     </div>
     <div class="stat-card">
       <span class="stat-label">No Next Step</span>
@@ -676,6 +768,7 @@ function renderNormalizationDashboard(payload) {
 
 function renderFeedbackLearningDashboard(payload) {
   const summary = payload.summary ?? {};
+  const learningInsights = payload.learning_insights ?? [];
   els.feedbackLearningSummary.innerHTML = `
     <div class="stat-card">
       <span class="stat-label">Feedback</span>
@@ -697,6 +790,18 @@ function renderFeedbackLearningDashboard(payload) {
       <span class="stat-label">Coverage</span>
       <strong>${Math.round((summary.recommendation_coverage ?? 0) * 100)}%</strong>
     </div>
+    <div class="stat-card">
+      <span class="stat-label">Learning</span>
+      <strong>${summary.learning_readiness ?? 'cold'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Promote</span>
+      <strong>${summary.top_promote_action ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Suppress</span>
+      <strong>${summary.top_suppress_action ?? '—'}</strong>
+    </div>
   `;
 
   const actionItems = payload.action_metrics ?? [];
@@ -714,10 +819,28 @@ function renderFeedbackLearningDashboard(payload) {
           <span class="badge badge-low">accepted ${Math.round((item.accepted_rate ?? 0) * 100)}%</span>
           <span class="badge badge-low">executed ${Math.round((item.executed_rate ?? 0) * 100)}%</span>
           <span class="badge badge-low">rejected ${Math.round((item.rejected_rate ?? 0) * 100)}%</span>
+          <span class="badge badge-${item.learning_state === 'promote' ? 'low' : item.learning_state === 'suppress' ? 'critical' : 'high'}">${item.learning_state}</span>
+          <span class="badge badge-low">score ${item.learning_score}</span>
         </div>
+        <div class="muted">${item.guidance ?? '—'}</div>
       </article>
     `).join('')
     : '<div class="empty">По рекомендациям пока мало данных для обучения.</div>';
+
+  if (learningInsights.length) {
+    els.feedbackLearningList.innerHTML += learningInsights.map((item) => `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">${item.action_code ?? 'unknown'}</h3>
+            <div class="queue-subtitle">learning insight</div>
+          </div>
+          <span class="badge badge-${item.learning_state === 'promote' ? 'low' : item.learning_state === 'suppress' ? 'critical' : 'high'}">${item.learning_state}</span>
+        </div>
+        <div class="muted">${item.guidance ?? '—'}</div>
+      </article>
+    `).join('');
+  }
 
   const recentItems = payload.recent_feedback ?? [];
   els.feedbackRecentList.innerHTML = recentItems.length
@@ -815,6 +938,11 @@ function renderGraphBlock(graph) {
 
   return `
     <div class="graph-board">
+      <div class="badge-row" style="margin-bottom: 10px;">
+        <span class="badge badge-low">source: ${graph.source ?? 'unknown'}</span>
+        <span class="badge badge-low">nodes: ${graph.summary?.nodes_count ?? graph.nodes?.length ?? 0}</span>
+        <span class="badge badge-low">edges: ${graph.summary?.edges_count ?? graph.edges?.length ?? 0}</span>
+      </div>
       <div class="graph-nodes">
         ${graph.nodes.map((node) => `
           <div class="graph-node">
@@ -1129,6 +1257,7 @@ function renderCard(card) {
             Менеджер: card.summary.owner_manager,
             Объект: card.summary.object,
             Техника: card.summary.equipment_type,
+            'Модель техники': card.enriched_context?.equipment_model ?? '—',
             Стадия: card.summary.commercial_stage,
             'Последнее касание': formatDateTime(card.summary.last_touch_at),
           })}
@@ -1148,6 +1277,7 @@ function renderCard(card) {
             'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
             Support: card.decision_support?.support_level ?? 'minimal',
             Guard: card.decision_support?.confidence_guard ? 'confidence guard active' : '—',
+            'Client next step': card.enriched_context?.client_expected_next_step ?? '—',
           })}
         </dl>
         <div class="badge-row">
@@ -1282,7 +1412,7 @@ function renderCard(card) {
           ${(card.similar_cases ?? []).map((item) => `
             <div class="history-item">
               <strong>${item.title ?? 'Без названия'}</strong>
-              <div class="muted">outcome: ${item.outcome ?? '—'} · source: ${item.source ?? 'unknown'} · score: ${item.score ?? '—'}</div>
+              <div class="muted">outcome: ${item.outcome ?? '—'} · source: ${item.source ?? 'unknown'} · mode: ${item.source_mode ?? 'unknown'} · score: ${item.score ?? '—'}</div>
               <div>${item.hint ?? '—'}</div>
               ${(item.match_reasons ?? []).length ? `<div class="badge-row">${item.match_reasons.map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}</div>` : ''}
             </div>

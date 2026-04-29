@@ -19,6 +19,16 @@ function getExtractionConfidenceProfile(opportunity) {
       .map((item) => item.decision_access?.confidence)
       .filter((value) => value !== null && value !== undefined),
   );
+  const priceConfidence = average(
+    extractionEvents
+      .map((item) => item.price_context?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+  );
+  const geoConfidence = average(
+    extractionEvents
+      .map((item) => item.geo_hint?.confidence)
+      .filter((value) => value !== null && value !== undefined),
+  );
 
   const lowObject = objectConfidence !== null && objectConfidence < 0.65;
   const lowEquipment = equipmentConfidence !== null && equipmentConfidence < 0.65;
@@ -28,6 +38,8 @@ function getExtractionConfidenceProfile(opportunity) {
     object: objectConfidence,
     equipment: equipmentConfidence,
     decision_access: decisionAccessConfidence,
+    price: priceConfidence,
+    geo: geoConfidence,
     low_object: lowObject,
     low_equipment: lowEquipment,
     low_decision_access: lowDecisionAccess,
@@ -43,6 +55,8 @@ function scoreNeed(opportunity) {
   if ((opportunity.communication_events ?? []).length >= 2) score += 1;
   if (opportunity.commercial_scenario) score += 1;
   if (opportunity.commercial_stage === 'offer_requested' || opportunity.commercial_stage === 'contract_requested') score += 0.5;
+  if (opportunity.client_expected_next_step) score += 0.5;
+  if (opportunity.readiness_signals?.urgency_high) score += 0.25;
   const confidence = getExtractionConfidenceProfile(opportunity);
   if (confidence.low_object) score -= 0.75;
   if (confidence.low_equipment) score -= 0.5;
@@ -68,8 +82,10 @@ function scoreTime(opportunity) {
 function scoreSpec(opportunity) {
   let score = 0;
   if (opportunity.equipment_type?.normalized_value) score += 2;
+  if (opportunity.equipment_model) score += 0.5;
   if (opportunity.technical_requirements?.length) score += 1.5;
   if ((opportunity.technical_requirements?.length ?? 0) >= 2) score += 0.5;
+  if (opportunity.work_conditions?.length) score += 0.75;
   if (opportunity.time_window?.duration_days) score += 0.75;
   if (opportunity.project_object?.normalized_value) score += 0.75;
   const confidence = getExtractionConfidenceProfile(opportunity);
@@ -84,6 +100,7 @@ function scoreAccess(opportunity) {
   if (opportunity.decision_access_status === 'influencer') score += 1;
   if (opportunity.contact_person?.role?.toLowerCase().includes('лпр')) score += 1.5;
   if (opportunity.contact_person?.influence_score >= 0.7) score += 1;
+  if (opportunity.readiness_signals?.contract_ready) score += 0.5;
   return clampScore(score);
 }
 
@@ -94,6 +111,8 @@ function scoreMoney(opportunity) {
   if (opportunity.commercial_stage === 'invoice_requested') score += 2;
   if (opportunity.payment_readiness === 'commercial') score += 0.5;
   if (opportunity.payment_readiness === 'ready') score += 1;
+  if (opportunity.readiness_signals?.payment_ready) score += 0.75;
+  if (opportunity.price_context?.raw_value) score += 0.5;
   if (opportunity.financial_risk?.debt_overdue_days > 0) score -= 2;
   return clampScore(score);
 }
@@ -103,6 +122,7 @@ function scoreFit(opportunity) {
   if (opportunity.economic_assessment?.own_equipment_available) score += 2.5;
   if (opportunity.economic_assessment?.expected_margin_percent >= 25) score += 1.5;
   if (opportunity.economic_assessment?.expected_margin_percent >= 15 && opportunity.economic_assessment?.expected_margin_percent < 25) score += 0.75;
+  if (opportunity.geo_hint?.normalized_value) score += 0.5;
   if (opportunity.economic_assessment?.subrent_required) score -= 0.5;
   if (opportunity.financial_risk?.client_blacklisted) score = 0;
   return clampScore(score);
@@ -183,6 +203,7 @@ export function evaluateOpportunityState(opportunity) {
   const debtRiskDetected = (opportunity.financial_risk?.debt_overdue_days ?? 0) > 0 || opportunity.financial_risk?.credit_limit_blocked;
   const expectedMargin = opportunity.economic_assessment?.expected_margin_percent ?? null;
   const accessUnknown = !opportunity.project_object?.normalized_value && opportunity.address?.normalized_value;
+  const hasStrongClientIntent = Boolean(opportunity.client_expected_next_step || opportunity.readiness_signals?.contract_ready || opportunity.readiness_signals?.payment_ready);
 
   if (scores.need >= 4 && scores.time >= 4 && scores.money >= 3 && !confidence.has_critical_gap) {
     addState(states, 'hot_urgent', 'Потребность конкретная, окно мобилизации близко, клиент дошел до коммерческой стадии.', 0.88);
@@ -198,6 +219,18 @@ export function evaluateOpportunityState(opportunity) {
 
   if (scores.spec >= 4 && !confidence.has_critical_gap) {
     addState(states, 'spec_strong', 'Техника и условия достаточно конкретизированы для уверенного предложения.', 0.78);
+  }
+
+  if (scores.need >= 3.5 && hasStrongClientIntent) {
+    addState(states, 'client_intent_confirmed', 'Клиент явно обозначил ожидаемый следующий шаг или готовность к движению вперед.', 0.8);
+  }
+
+  if (opportunity.price_context?.raw_value && scores.money >= 2.5) {
+    addState(states, 'price_context_known', 'В коммуникациях уже есть ценовой контекст, можно точнее управлять коммерческим сценарием.', 0.74);
+  }
+
+  if ((opportunity.work_conditions?.length ?? 0) >= 1 && scores.spec >= 3) {
+    addState(states, 'logistics_context_ready', 'Условия работы и доступа уже частично описаны, логистика может подключаться раньше.', 0.71);
   }
 
   if (confidence.has_critical_gap) {

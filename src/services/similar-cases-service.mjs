@@ -53,6 +53,7 @@ function heuristicSimilarCases(opportunity, opportunities) {
         hint: item.next_step?.description ?? 'Похожий кейс из локального fallback-поиска.',
         score,
         source,
+        source_mode: 'heuristic',
         recommended_action_hint: item.next_step?.code ?? null,
         match_reasons: matchReasons,
       };
@@ -68,8 +69,10 @@ async function qdrantSimilarCases(opportunity) {
     opportunity.company?.raw_value,
     opportunity.project_object?.raw_value,
     opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value,
+    opportunity.equipment_model,
     opportunity.commercial_stage,
     opportunity.next_step?.description,
+    opportunity.client_expected_next_step,
     ...(opportunity.communication_events ?? []).slice(0, 3).map((item) => item.summary ?? item.text),
   ].filter(Boolean).join('\n');
 
@@ -81,8 +84,8 @@ async function qdrantSimilarCases(opportunity) {
   ].filter((item) => item.match.value);
 
   const collectionPriority = opportunity.commercial_stage === 'lost'
-    ? [collections.lost_deals, collections.object_history, collections.deal_events]
-    : [collections.won_deals, collections.object_history, collections.deal_events];
+    ? [collections.lost_deals, collections.object_history, collections.contact_person, collections.competitor_mentions, collections.deal_events]
+    : [collections.won_deals, collections.object_history, collections.contact_person, collections.competitor_mentions, collections.deal_events];
 
   const results = [];
   for (const collectionName of collectionPriority) {
@@ -99,11 +102,15 @@ async function qdrantSimilarCases(opportunity) {
         hint: item.payload?.text?.slice(0, 180) ?? 'Semantic match from Qdrant.',
         score: Number(item.score?.toFixed?.(3) ?? item.score ?? 0),
         source: item.payload?.entity_type ?? collectionName,
+        source_mode: 'qdrant',
+        support_level: (item.score ?? 0) >= 0.82 ? 'high' : (item.score ?? 0) >= 0.68 ? 'medium' : 'light',
         recommended_action_hint: item.payload?.next_step_code ?? null,
         match_reasons: [
           item.payload?.equipment_type ? 'same_equipment' : null,
           item.payload?.object ? 'same_object' : null,
           item.payload?.decision_access_status ? 'same_access' : null,
+          item.payload?.entity_type === 'contact_person' ? 'same_contact_context' : null,
+          item.payload?.entity_type === 'competitor_mention' ? 'competitor_context' : null,
         ].filter(Boolean),
       });
     }

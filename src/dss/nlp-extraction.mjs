@@ -20,6 +20,9 @@ const INVOICE_STAGE_MARKERS = ['просит счет', 'просит счёт',
 const TECH_SPEC_MARKERS = ['грузоподъем', 'грузоподъ', 'тонн', 'тн', 'вылет', 'стрела', 'высота', 'глубина', 'объем ковша', 'объём ковша', 'длина', 'смена', 'режим работы', 'график', 'габарит'];
 const WORK_CONDITION_MARKERS = ['пропуск', 'ночная смена', 'круглосуточно', 'стесненные условия', 'стеснённые условия', 'заезд', 'окно', 'мобилизация', 'плечо', 'база', 'предоплата', 'безнал', 'ндс'];
 const PRICE_MARKERS = ['ставка', 'цена', 'бюджет', 'маржа', 'дорого', 'дешевле', 'скидка', 'руб', 'р/смена', 'за смену'];
+const PAYMENT_NEGOTIATION_MARKERS = ['предоплата', 'отсрочка', 'безнал', 'ндс', 'постоплата', 'аванс', 'частичная предоплата'];
+const ACCESS_RESTRICTION_MARKERS = ['пропуск', 'заезд', 'окно', 'только ночью', 'только утром', 'ночная смена', 'стесненные условия', 'стеснённые условия', 'доступ на объект', 'согласовать заезд'];
+const REGION_MARKERS = ['москва', 'мо', 'московская область', 'питер', 'спб', 'санкт-петербург'];
 const NEXT_STEP_MARKERS = [
   ['отправить кп', 'send_offer'],
   ['выслать кп', 'send_offer'],
@@ -312,13 +315,23 @@ function detectObject(sourceText) {
 
   const cleaned = sentence.replace(/^(на|по)\s+/i, '').trim();
   const lowered = cleaned.toLowerCase();
+  const genericClientSentence = (
+    lowered.startsWith('клиент ')
+    || lowered.startsWith('заказчик ')
+    || lowered.startsWith('просит ')
+    || lowered.startsWith('ждет ')
+    || lowered.startsWith('ждёт ')
+    || lowered.startsWith('нужен ')
+    || lowered.startsWith('нужна ')
+    || lowered.startsWith('нужны ')
+  );
   const genericOnly = (
     (lowered.includes('объект') || lowered.includes('площадк'))
     && !OBJECT_KEYWORDS.some((keyword) => keyword !== 'объект' && keyword !== 'площадка' && lowered.includes(keyword))
     && (lowered.includes('конкурент') || lowered.includes('уже стоит') || lowered.includes('люди конкурента'))
   );
 
-  return genericOnly ? null : normalizeObjectName(cleaned);
+  return (genericOnly || genericClientSentence) ? null : normalizeObjectName(cleaned);
 }
 
 function detectAddress(sourceText) {
@@ -442,13 +455,15 @@ function detectPriceContext(sourceText) {
   const sentences = splitSentences(sourceText);
   const matched = sentences.filter((sentence) => {
     const lowered = sentence.toLowerCase();
-    return PRICE_MARKERS.some((marker) => lowered.includes(marker)) || /\b\d[\d\s]{2,}\s*(?:руб|₽)\b/i.test(sentence);
+    return PRICE_MARKERS.some((marker) => lowered.includes(marker))
+      || /\b\d[\d\s]{2,}\s*(?:руб|₽)\b/i.test(sentence)
+      || /\b\d{1,2}\s*%\b/i.test(sentence);
   });
 
   return {
     raw_value: matched[0] ?? null,
     markers: matched.slice(0, 4),
-    confidence: matched.length ? 0.76 : 0.28,
+    confidence: matched.length ? 0.82 : 0.28,
   };
 }
 
@@ -456,7 +471,9 @@ function detectWorkConditions(sourceText) {
   const sentences = splitSentences(sourceText);
   const matched = sentences.filter((sentence) => {
     const lowered = sentence.toLowerCase();
-    return WORK_CONDITION_MARKERS.some((marker) => lowered.includes(marker));
+    return WORK_CONDITION_MARKERS.some((marker) => lowered.includes(marker))
+      || ACCESS_RESTRICTION_MARKERS.some((marker) => lowered.includes(marker))
+      || PAYMENT_NEGOTIATION_MARKERS.some((marker) => lowered.includes(marker));
   });
   return Array.from(new Set(matched.map((item) => cleanText(item)).filter(Boolean))).slice(0, 6);
 }
@@ -468,6 +485,10 @@ function detectClientExpectedNextStep(sourceText) {
     'ждёт',
     'ожидает',
     'просит',
+    'нужно',
+    'нужен',
+    'нужна',
+    'подписать',
     'нужен договор',
     'нужен счет',
     'нужен счёт',
@@ -493,6 +514,21 @@ function detectGeoHint(sourceText, address) {
       confidence: address.confidence_score ?? 0.8,
     };
   }
+
+  const sentences = splitSentences(sourceText);
+  const regionSentence = sentences.find((sentence) => {
+    const lowered = sentence.toLowerCase();
+    return REGION_MARKERS.some((marker) => lowered.includes(marker));
+  });
+  if (regionSentence) {
+    const normalized = cleanText(regionSentence).toLowerCase();
+    return {
+      raw_value: cleanText(regionSentence),
+      normalized_value: normalized,
+      confidence: 0.62,
+      region: normalized.includes('моск') ? (normalized.includes('област') || normalized.includes(' мо') ? 'МО' : 'Москва') : cleanText(regionSentence),
+    };
+  }
   return null;
 }
 
@@ -502,11 +538,43 @@ function detectPaymentReadiness(sourceText) {
     return 'ready';
   }
 
+  if (PAYMENT_NEGOTIATION_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'commercial';
+  }
+
+  if (OFFER_STAGE_MARKERS.some((marker) => lowered.includes(marker))) {
+    return 'commercial';
+  }
+
+  if (PRICE_MARKERS.some((marker) => lowered.includes(marker)) || /\b\d{1,2}\s*%\b/i.test(sourceText)) {
+    return 'commercial';
+  }
+
   if (MONEY_MARKERS.some((marker) => lowered.includes(marker))) {
     return 'commercial';
   }
 
   return 'early';
+}
+
+function boostDecisionAccessFromPerson(person, currentDecisionAccess) {
+  if (!person?.raw_value) return currentDecisionAccess;
+  const lowered = person.raw_value.toLowerCase();
+  if (DECISION_MAKER_MARKERS.some((marker) => lowered.includes(marker))) {
+    return {
+      value: 'decision_maker',
+      markers: Array.from(new Set([...(currentDecisionAccess.markers ?? []), 'person_role_hint'])),
+      confidence: Math.max(currentDecisionAccess.confidence ?? 0, 0.82),
+    };
+  }
+  if (INFLUENCER_MARKERS.some((marker) => lowered.includes(marker))) {
+    return {
+      value: 'influencer',
+      markers: Array.from(new Set([...(currentDecisionAccess.markers ?? []), 'person_role_hint'])),
+      confidence: Math.max(currentDecisionAccess.confidence ?? 0, 0.72),
+    };
+  }
+  return currentDecisionAccess;
 }
 
 function detectTechnicalRequirements(sourceText) {
@@ -559,6 +627,7 @@ export function extractEntitiesFromText(text) {
   const technicalRequirements = detectTechnicalRequirements(sourceText);
   const company = detectCompany(sourceText);
   const person = detectPerson(sourceText);
+  const effectiveDecisionAccess = boostDecisionAccessFromPerson(person, decisionAccess);
   const projectObject = detectObject(sourceText);
   const address = detectAddress(sourceText);
   const equipmentType = detectEquipment(sourceText);
@@ -576,7 +645,7 @@ export function extractEntitiesFromText(text) {
     equipment_model: detectEquipmentModel(sourceText, equipmentType),
     urgency: detectUrgency(sourceText),
     money_readiness: detectMoneyReadiness(sourceText),
-    decision_access: decisionAccess,
+    decision_access: effectiveDecisionAccess,
     competitor: detectCompetitor(sourceText),
     supply_mode: detectSupplyMode(sourceText),
     debt_risk: detectDebtRisk(sourceText),

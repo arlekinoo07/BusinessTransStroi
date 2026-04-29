@@ -58,6 +58,27 @@ const STATE_TO_ACTION = [
     why: 'Есть доступ к принимающему решение, стоит использовать окно прямого контакта.',
   },
   {
+    state: 'client_intent_confirmed',
+    action: 'sales_call',
+    escalation: null,
+    priority: 81,
+    why: 'Клиент явно обозначил следующий шаг, важно быстро закрепить инициативу.',
+  },
+  {
+    state: 'price_context_known',
+    action: 'send_offer',
+    escalation: null,
+    priority: 77,
+    why: 'Ценовой контекст уже понятен, поэтому можно быстрее переходить к коммерческому действию.',
+  },
+  {
+    state: 'logistics_context_ready',
+    action: 'clarify_object_access',
+    escalation: null,
+    priority: 74,
+    why: 'Есть условия работы и доступа, их стоит быстро превратить в логистически исполнимый сценарий.',
+  },
+  {
     state: 'competitor_attack_window',
     action: 'competitor_attack',
     escalation: 'owner_escalation',
@@ -124,9 +145,12 @@ const STATE_TO_ACTION = [
 
 function getEffectivenessBonus(actionEffectiveness) {
   if (!actionEffectiveness) return 0;
+  const total = actionEffectiveness.total ?? 0;
+  if (total < 2) return 0;
   const accepted = actionEffectiveness.accepted_rate ?? 0;
   const executed = actionEffectiveness.executed_rate ?? 0;
-  return Number(((accepted * 4) + (executed * 6)).toFixed(2));
+  const rejected = actionEffectiveness.rejected_rate ?? 0;
+  return Number(((accepted * 4) + (executed * 6) - (rejected * 5)).toFixed(2));
 }
 
 function getExtractionGuardPenalty(opportunityState, actionCode) {

@@ -498,6 +498,29 @@ export const logisticsQueueItemSchema = {
     recommended_action: { type: ['string', 'null'] },
     partner_hint: { type: ['string', 'null'] },
     demand_cluster_hint: { type: ['string', 'null'] },
+    economics_mode: { type: ['string', 'null'] },
+    economics_reason: { type: ['string', 'null'] },
+    margin_pressure: { type: ['string', 'null'] },
+    expected_margin_percent: { type: ['number', 'null'] },
+    mobilization_distance_km: { type: ['number', 'null'] },
+    recommended_partner: {
+      type: ['object', 'null'],
+      properties: {
+        name: { type: ['string', 'null'] },
+        reliability_percent: { type: ['number', 'null'] },
+        shoulder_km: { type: ['number', 'null'] },
+        score: { type: ['number', 'null'] },
+      },
+    },
+    reserve_unit: {
+      type: ['object', 'null'],
+      properties: {
+        registry_id: { type: ['string', 'null'] },
+        model: { type: ['string', 'null'] },
+        base_location: { type: ['string', 'null'] },
+        availability_status: { type: ['string', 'null'] },
+      },
+    },
     deadline_at: { type: ['string', 'null'], format: 'date-time' },
     state_codes: {
       type: 'array',
@@ -520,6 +543,9 @@ export const ownerDashboardItemSchema = {
     strategy_flag: { type: 'string' },
     owner_signal: { type: ['string', 'null'] },
     recommended_action: { type: ['string', 'null'] },
+    reserve_unit: { type: ['string', 'null'] },
+    recommended_partner: { type: ['string', 'null'] },
+    margin_pressure: { type: ['string', 'null'] },
     signal_markers: {
       type: 'array',
       items: { type: 'string' },
@@ -537,8 +563,13 @@ export const ownerDashboardSchema = {
         own_equipment_share: { type: 'number' },
         subrent_dependency_share: { type: 'number' },
         debt_exposure_share: { type: 'number' },
+        reserve_coverage_share: { type: 'number' },
+        partner_coverage_share: { type: 'number' },
         confidence_guard_share: { type: 'number' },
         average_margin_percent: { type: ['number', 'null'] },
+        margin_risk_share: { type: 'number' },
+        strategic_load_ready_share: { type: 'number' },
+        live_support_share: { type: 'number' },
         recommendation_accepted_rate: { type: 'number' },
         recommendation_executed_rate: { type: 'number' },
         ingest_failed_events: { type: 'number' },
@@ -642,6 +673,9 @@ export const feedbackLearningSchema = {
         executed_rate: { type: 'number' },
         rejected_rate: { type: 'number' },
         recommendation_coverage: { type: 'number' },
+        learning_readiness: { type: 'string' },
+        top_promote_action: { type: ['string', 'null'] },
+        top_suppress_action: { type: ['string', 'null'] },
       },
     },
     action_metrics: {
@@ -657,6 +691,21 @@ export const feedbackLearningSchema = {
           accepted_rate: { type: 'number' },
           executed_rate: { type: 'number' },
           rejected_rate: { type: 'number' },
+          learning_score: { type: 'number' },
+          learning_state: { type: 'string' },
+          guidance: { type: ['string', 'null'] },
+        },
+      },
+    },
+    learning_insights: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          action_code: { type: ['string', 'null'] },
+          learning_state: { type: 'string' },
+          learning_score: { type: 'number' },
+          guidance: { type: ['string', 'null'] },
         },
       },
     },
@@ -764,7 +813,12 @@ export const systemStatusSchema = {
       properties: {
         ready: { type: 'boolean' },
         state: { type: 'string' },
+        level: { type: 'string' },
         reasons: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+        operational_gaps: {
           type: 'array',
           items: { type: 'string' },
         },
@@ -773,6 +827,17 @@ export const systemStatusSchema = {
     warnings: {
       type: 'array',
       items: { type: 'string' },
+    },
+    operational_checklist: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+          status: { type: 'string' },
+          detail: { type: ['string', 'null'] },
+        },
+      },
     },
   },
 };

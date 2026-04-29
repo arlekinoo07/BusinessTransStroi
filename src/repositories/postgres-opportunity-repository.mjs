@@ -147,6 +147,30 @@ function roundRate(value) {
   return Number(value.toFixed(3));
 }
 
+function buildLearningInsight(metric) {
+  const learningScore = Number((((metric.accepted_rate ?? 0) * 0.35) + ((metric.executed_rate ?? 0) * 0.5) - ((metric.rejected_rate ?? 0) * 0.4)).toFixed(3));
+  let learningState = 'observe';
+  let guidance = 'Недостаточно устойчивого сигнала, продолжаем копить обратную связь.';
+
+  if ((metric.total ?? 0) >= 3 && learningScore >= 0.45) {
+    learningState = 'promote';
+    guidance = 'Действие можно смелее поднимать в приоритете при похожих состояниях.';
+  } else if ((metric.total ?? 0) >= 3 && learningScore <= 0.05) {
+    learningState = 'suppress';
+    guidance = 'Действие стоит ослабить или чаще заменять альтернативой.';
+  } else if ((metric.total ?? 0) >= 2) {
+    learningState = 'watch';
+    guidance = 'Сигнал есть, но пока рано менять политику выбора радикально.';
+  }
+
+  return {
+    ...metric,
+    learning_score: learningScore,
+    learning_state: learningState,
+    guidance,
+  };
+}
+
 let auditSchemaEnsured = false;
 let normalizationDecisionSchemaEnsured = false;
 let opportunityEnrichmentSchemaEnsured = false;
@@ -1165,6 +1189,30 @@ export class PostgresOpportunityRepository {
       }
     }
 
+    const actionMetrics = Array.from(actionStats.values())
+      .map((item) => ({
+        ...item,
+        accepted_rate: item.total ? roundRate(item.accepted / item.total) : 0,
+        executed_rate: item.total ? roundRate(item.executed / item.total) : 0,
+        rejected_rate: item.total ? roundRate(item.rejected / item.total) : 0,
+      }))
+      .map(buildLearningInsight)
+      .sort((left, right) => right.total - left.total)
+      .slice(0, limit);
+    const rankedInsights = actionMetrics
+      .slice()
+      .sort((left, right) => right.learning_score - left.learning_score);
+    const topPromote = rankedInsights.find((item) => item.learning_state === 'promote') ?? null;
+    const topSuppress = rankedInsights
+      .slice()
+      .reverse()
+      .find((item) => item.learning_state === 'suppress') ?? null;
+    const learningReadiness = totalFeedback >= 8
+      ? 'active'
+      : totalFeedback >= 3
+        ? 'warming'
+        : 'cold';
+
     return {
       summary: {
         total_feedback: totalFeedback,
@@ -1172,16 +1220,17 @@ export class PostgresOpportunityRepository {
         executed_rate: totalFeedback ? roundRate(executed / totalFeedback) : 0,
         rejected_rate: totalFeedback ? roundRate(rejected / totalFeedback) : 0,
         recommendation_coverage: totalRecommendations ? roundRate(totalFeedback / totalRecommendations) : 0,
+        learning_readiness: learningReadiness,
+        top_promote_action: topPromote?.action_code ?? null,
+        top_suppress_action: topSuppress?.action_code ?? null,
       },
-      action_metrics: Array.from(actionStats.values())
-        .map((item) => ({
-          ...item,
-          accepted_rate: item.total ? roundRate(item.accepted / item.total) : 0,
-          executed_rate: item.total ? roundRate(item.executed / item.total) : 0,
-          rejected_rate: item.total ? roundRate(item.rejected / item.total) : 0,
-        }))
-        .sort((left, right) => right.total - left.total)
-        .slice(0, limit),
+      action_metrics: actionMetrics,
+      learning_insights: rankedInsights.slice(0, limit).map((item) => ({
+        action_code: item.action_code,
+        learning_state: item.learning_state,
+        learning_score: item.learning_score,
+        guidance: item.guidance,
+      })),
       rejection_reasons: Array.from(rejectionReasons.entries())
         .map(([reason, total]) => ({ reason, total }))
         .sort((left, right) => right.total - left.total)

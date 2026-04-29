@@ -147,6 +147,28 @@ async function ensureCollection(name, vectorSize) {
   });
 }
 
+async function getCollectionInfoSafe(client, name) {
+  try {
+    const info = await client.getCollection(name);
+    const config = info?.config?.params?.vectors ?? info?.result?.config?.params?.vectors ?? null;
+    return {
+      exists: true,
+      points_count: info?.points_count ?? info?.result?.points_count ?? null,
+      indexed_vectors_count: info?.indexed_vectors_count ?? info?.result?.indexed_vectors_count ?? null,
+      vector_size: config?.size ?? null,
+      distance: config?.distance ?? null,
+    };
+  } catch {
+    return {
+      exists: false,
+      points_count: null,
+      indexed_vectors_count: null,
+      vector_size: null,
+      distance: null,
+    };
+  }
+}
+
 async function upsertPoints(collectionName, points) {
   const client = getQdrantClient();
   if (!client || !points.length) {
@@ -334,35 +356,74 @@ export async function searchQdrantCollection(collectionName, {
     return [];
   }
 
-  const vector = await createEmbedding(text);
-  return client.search(collectionName, {
-    vector,
-    limit,
-    with_payload: true,
-    filter: must.length ? { must } : undefined,
-  });
+  try {
+    const vector = await createEmbedding(text);
+    return await client.search(collectionName, {
+      vector,
+      limit,
+      with_payload: true,
+      filter: must.length ? { must } : undefined,
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function getQdrantStatus() {
   if (!hasQdrantConfig()) {
     return {
       enabled: false,
+      configured: false,
+      reachable: false,
       embedding_model: EMBEDDING_MODEL,
       collections: getQdrantCollections(),
     };
   }
 
   const client = getQdrantClient();
-  const collectionsResponse = await client.getCollections();
-  const existing = collectionsResponse.collections.map((item) => item.name);
 
-  return {
-    enabled: true,
-    embedding_model: EMBEDDING_MODEL,
-    collections: Object.entries(COLLECTIONS).map(([key, name]) => ({
-      key,
-      name,
-      exists: existing.includes(name),
-    })),
-  };
+  try {
+    const collectionsResponse = await client.getCollections();
+    const existing = collectionsResponse.collections.map((item) => item.name);
+    const collectionDetails = [];
+
+    for (const [key, name] of Object.entries(COLLECTIONS)) {
+      if (!existing.includes(name)) {
+        collectionDetails.push({
+          key,
+          name,
+          exists: false,
+          points_count: null,
+          indexed_vectors_count: null,
+          vector_size: null,
+          distance: null,
+        });
+        continue;
+      }
+
+      const info = await getCollectionInfoSafe(client, name);
+      collectionDetails.push({ key, name, ...info });
+    }
+
+    return {
+      enabled: true,
+      configured: true,
+      reachable: true,
+      embedding_model: EMBEDDING_MODEL,
+      collections: collectionDetails,
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      configured: true,
+      reachable: false,
+      embedding_model: EMBEDDING_MODEL,
+      collections: Object.entries(COLLECTIONS).map(([key, name]) => ({
+        key,
+        name,
+        exists: false,
+      })),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

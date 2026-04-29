@@ -57,6 +57,7 @@ function ensureOpportunity(externalId) {
       credit_limit_blocked: false,
       client_blacklisted: false,
     },
+    owner_manager: null,
     next_step: {
       code: null,
       due_at: null,
@@ -94,8 +95,42 @@ function roundRate(value) {
   return Number(value.toFixed(3));
 }
 
+function buildLearningInsight(metric) {
+  const learningScore = Number((((metric.accepted_rate ?? 0) * 0.35) + ((metric.executed_rate ?? 0) * 0.5) - ((metric.rejected_rate ?? 0) * 0.4)).toFixed(3));
+  let learningState = 'observe';
+  let guidance = 'Недостаточно устойчивого сигнала, продолжаем копить обратную связь.';
+
+  if ((metric.total ?? 0) >= 3 && learningScore >= 0.45) {
+    learningState = 'promote';
+    guidance = 'Действие можно смелее поднимать в приоритете при похожих состояниях.';
+  } else if ((metric.total ?? 0) >= 3 && learningScore <= 0.05) {
+    learningState = 'suppress';
+    guidance = 'Действие стоит ослабить или чаще заменять альтернативой.';
+  } else if ((metric.total ?? 0) >= 2) {
+    learningState = 'watch';
+    guidance = 'Сигнал есть, но пока рано менять политику выбора радикально.';
+  }
+
+  return {
+    ...metric,
+    learning_score: learningScore,
+    learning_state: learningState,
+    guidance,
+  };
+}
+
 function currentIsoTime() {
   return new Date().toISOString();
+}
+
+function buildOwnerManagerPatch(externalId, fullName, roleCode = 'sales_manager') {
+  if (!externalId && !fullName) return null;
+  const normalizedId = externalId ? String(externalId) : null;
+  return {
+    external_id: normalizedId ?? '',
+    full_name: fullName ?? (normalizedId ? `Менеджер Bitrix ${normalizedId}` : null),
+    role_code: roleCode,
+  };
 }
 
 function parseAcceptedNormalizationAliases() {
@@ -344,8 +379,23 @@ export class InMemoryOpportunityRepository {
         executed_rate: item.total ? roundRate(item.executed / item.total) : 0,
         rejected_rate: item.total ? roundRate(item.rejected / item.total) : 0,
       }))
+      .map(buildLearningInsight)
       .sort((left, right) => right.total - left.total)
       .slice(0, limit);
+
+    const rankedInsights = actionMetrics
+      .slice()
+      .sort((left, right) => right.learning_score - left.learning_score);
+    const topPromote = rankedInsights.find((item) => item.learning_state === 'promote') ?? null;
+    const topSuppress = rankedInsights
+      .slice()
+      .reverse()
+      .find((item) => item.learning_state === 'suppress') ?? null;
+    const learningReadiness = totalFeedback >= 8
+      ? 'active'
+      : totalFeedback >= 3
+        ? 'warming'
+        : 'cold';
 
     const recentFeedback = feedback
       .slice()
@@ -376,7 +426,16 @@ export class InMemoryOpportunityRepository {
         executed_rate: totalFeedback ? roundRate(executed / totalFeedback) : 0,
         rejected_rate: totalFeedback ? roundRate(rejected / totalFeedback) : 0,
         recommendation_coverage: recommendations.length ? roundRate(totalFeedback / recommendations.length) : 0,
+        learning_readiness: learningReadiness,
+        top_promote_action: topPromote?.action_code ?? null,
+        top_suppress_action: topSuppress?.action_code ?? null,
       },
+      learning_insights: rankedInsights.slice(0, limit).map((item) => ({
+        action_code: item.action_code,
+        learning_state: item.learning_state,
+        learning_score: item.learning_score,
+        guidance: item.guidance,
+      })),
       action_metrics: actionMetrics,
       rejection_reasons: Array.from(rejectionReasons.entries())
         .map(([reason, total]) => ({ reason, total }))
@@ -574,6 +633,14 @@ export class InMemoryOpportunityRepository {
           own_equipment_available: patch.own_equipment_available ?? opportunity.economic_assessment?.own_equipment_available ?? null,
           subrent_required: patch.subrent_required ?? opportunity.economic_assessment?.subrent_required ?? null,
         };
+        const ownerManager = buildOwnerManagerPatch(
+          patch.owner_manager_external_id ?? opportunity.owner_manager?.external_id ?? null,
+          patch.owner_manager_name ?? opportunity.owner_manager?.full_name ?? null,
+          opportunity.owner_manager?.role_code ?? 'sales_manager',
+        );
+        if (ownerManager) {
+          opportunity.owner_manager = ownerManager;
+        }
         opportunity.financial_risk = {
           ...opportunity.financial_risk,
           debt_overdue_days: patch.debt_overdue_days ?? opportunity.financial_risk?.debt_overdue_days ?? null,
@@ -640,6 +707,12 @@ export class InMemoryOpportunityRepository {
               credit_limit_blocked: patch.credit_limit_blocked ?? opportunity.financial_risk?.credit_limit_blocked ?? false,
               debt_overdue_days: patch.debt_risk_flag ? Math.max(opportunity.financial_risk?.debt_overdue_days ?? 0, 1) : opportunity.financial_risk?.debt_overdue_days ?? null,
             };
+            if (!opportunity.owner_manager && (patch.author_external_id || patch.author_name)) {
+              opportunity.owner_manager = buildOwnerManagerPatch(
+                patch.author_external_id,
+                patch.author_name,
+              );
+            }
             opportunity.graph_signals = {
               ...opportunity.graph_signals,
               competitor_present: patch.competitor_present ?? opportunity.graph_signals?.competitor_present ?? false,

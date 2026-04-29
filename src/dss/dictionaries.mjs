@@ -18,12 +18,14 @@ export const DICTIONARIES = {
     'Автовышка 28м',
   ],
   own_equipment_units: [
-    { registry_id: 'EQ-001', type_name: 'Автокран', own_flag: true, availability_status: 'available' },
-    { registry_id: 'EQ-002', type_name: 'Манипулятор', own_flag: true, availability_status: 'busy' },
+    { registry_id: 'EQ-001', type_name: 'Автокран', model: 'Автокран 25т', own_flag: true, availability_status: 'available', region: 'Москва', base_location: 'Северная база' },
+    { registry_id: 'EQ-002', type_name: 'Манипулятор', model: 'Манипулятор 10т', own_flag: true, availability_status: 'busy', region: 'МО', base_location: 'Южная база' },
+    { registry_id: 'EQ-003', type_name: 'Автовышка', model: 'Автовышка 28м', own_flag: true, availability_status: 'available', region: 'Москва', base_location: 'Западная база' },
   ],
   subrent_partners: [
-    { id: 'partner-1', name: 'Субрент Север', region: 'Москва', reliability: 0.82 },
-    { id: 'partner-2', name: 'Монолит Партнер', region: 'МО', reliability: 0.74 },
+    { id: 'partner-1', name: 'Субрент Север', region: 'Москва', reliability: 0.82, equipment_types: ['Автокран', 'Автовышка'], shoulder_km: 18, margin_pressure: 0.12 },
+    { id: 'partner-2', name: 'Монолит Партнер', region: 'МО', reliability: 0.74, equipment_types: ['Манипулятор', 'Экскаватор'], shoulder_km: 42, margin_pressure: 0.18 },
+    { id: 'partner-3', name: 'Кран Резерв', region: 'Москва', reliability: 0.88, equipment_types: ['Автокран'], shoulder_km: 25, margin_pressure: 0.16 },
   ],
   competitors: [
     { id: 'competitor-1', name: 'ТехноРент', confidence_level: 0.78 },

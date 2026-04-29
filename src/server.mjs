@@ -232,13 +232,82 @@ function deriveReadiness(systemStatus) {
   ]);
 
   const reasons = (systemStatus.warnings ?? []).filter((item) => blockingWarnings.has(item));
+  const operationalGaps = [];
+
+  if (systemStatus.ingest?.freshness_state !== 'active') {
+    operationalGaps.push(`ingest_${systemStatus.ingest?.freshness_state ?? 'unknown'}`);
+  }
+  if ((systemStatus.app?.http_latency_ms ?? 0) > 500) {
+    operationalGaps.push('http_latency_high');
+  }
+  if ((systemStatus.learning?.readiness ?? 'cold') === 'cold') {
+    operationalGaps.push('learning_cold');
+  }
+  if ((systemStatus.live_support?.vector_live_share ?? 0) < 50) {
+    operationalGaps.push('vector_support_low');
+  }
+  if ((systemStatus.live_support?.graph_live_share ?? 0) < 50) {
+    operationalGaps.push('graph_support_low');
+  }
+
   const ready = reasons.length === 0;
+  const level = ready
+    ? (operationalGaps.length === 0 ? 'production_ready' : 'pilot_ready')
+    : 'not_ready';
 
   return {
     ready,
     state: ready ? 'ready' : 'not_ready',
+    level,
     reasons,
+    operational_gaps: operationalGaps,
   };
+}
+
+function buildOperationalChecklist(systemStatus) {
+  const checklist = [];
+
+  checklist.push({
+    code: 'postgres',
+    status: systemStatus.postgres?.reachable ? 'ready' : systemStatus.postgres?.configured ? 'attention' : 'missing',
+    detail: systemStatus.postgres?.reachable ? 'PostgreSQL доступен.' : systemStatus.postgres?.configured ? 'PostgreSQL настроен, но недоступен.' : 'PostgreSQL не настроен.',
+  });
+  checklist.push({
+    code: 'qdrant',
+    status: systemStatus.qdrant?.reachable ? 'ready' : systemStatus.qdrant?.configured ? 'attention' : 'missing',
+    detail: systemStatus.qdrant?.reachable
+      ? `Qdrant доступен, коллекций: ${(systemStatus.qdrant?.collections ?? []).filter((item) => item.exists).length}.`
+      : systemStatus.qdrant?.configured ? 'Qdrant настроен, но недоступен.' : 'Qdrant не настроен.',
+  });
+  checklist.push({
+    code: 'neo4j',
+    status: systemStatus.neo4j?.reachable ? 'ready' : systemStatus.neo4j?.configured ? 'attention' : 'missing',
+    detail: systemStatus.neo4j?.reachable
+      ? `Neo4j доступен, граф: ${systemStatus.neo4j?.nodes_count ?? 0}n/${systemStatus.neo4j?.edges_count ?? 0}e.`
+      : systemStatus.neo4j?.configured ? 'Neo4j настроен, но недоступен.' : 'Neo4j не настроен.',
+  });
+  checklist.push({
+    code: 'ingest',
+    status: systemStatus.ingest?.freshness_state === 'active' ? 'ready' : systemStatus.ingest?.freshness_state === 'warming' ? 'attention' : 'missing',
+    detail: `Freshness=${systemStatus.ingest?.freshness_state ?? 'unknown'}, pending=${systemStatus.ingest?.pending_count ?? 0}, failed=${systemStatus.ingest?.failed_count ?? 0}.`,
+  });
+  checklist.push({
+    code: 'learning',
+    status: systemStatus.learning?.readiness === 'active' ? 'ready' : systemStatus.learning?.readiness === 'warming' ? 'attention' : 'missing',
+    detail: `Feedback=${systemStatus.learning?.total_feedback ?? 0}, readiness=${systemStatus.learning?.readiness ?? 'cold'}.`,
+  });
+  checklist.push({
+    code: 'vector_support',
+    status: (systemStatus.live_support?.vector_live_share ?? 0) >= 50 ? 'ready' : (systemStatus.live_support?.vector_live_share ?? 0) > 0 ? 'attention' : 'missing',
+    detail: `Vector live share=${systemStatus.live_support?.vector_live_share ?? 0}%.`,
+  });
+  checklist.push({
+    code: 'graph_support',
+    status: (systemStatus.live_support?.graph_live_share ?? 0) >= 50 ? 'ready' : (systemStatus.live_support?.graph_live_share ?? 0) > 0 ? 'attention' : 'missing',
+    detail: `Graph live share=${systemStatus.live_support?.graph_live_share ?? 0}%.`,
+  });
+
+  return checklist;
 }
 
 function buildLossRiskSummary(opportunity, state) {
@@ -264,6 +333,12 @@ function buildLossRiskSummary(opportunity, state) {
     return {
       level: 'medium',
       reason: 'Есть риск потерять не сделку, а экономику сделки из-за условий оплаты.',
+    };
+  }
+  if (state.states.some((item) => item.state_code === 'client_intent_confirmed')) {
+    return {
+      level: 'medium',
+      reason: 'Клиент уже сформулировал следующий шаг, и промедление может сбить momentum сделки.',
     };
   }
   if (state.states.some((item) => item.state_code === 'noise_low_priority')) {
@@ -335,6 +410,12 @@ function collectBlockingReasons(opportunity, state) {
   if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
     blockingReasons.push('Низкая уверенность в объекте или технике, нужна ручная верификация.');
   }
+  if (state.states.some((item) => item.state_code === 'negative_margin_blocked')) {
+    blockingReasons.push('Сделка уходит в отрицательную маржу.');
+  }
+  if (state.states.some((item) => item.state_code === 'blacklist_blocked')) {
+    blockingReasons.push('Клиент находится в стоп-контуре.');
+  }
 
   return blockingReasons;
 }
@@ -354,6 +435,9 @@ function collectLowPriorityReasons(opportunity, state) {
   }
   if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
     lowPriorityReasons.push('Сделку пока рано агрессивно атаковать: ключевые сущности распознаны неуверенно.');
+  }
+  if (!opportunity.client_expected_next_step && !opportunity.next_step?.code) {
+    lowPriorityReasons.push('Клиент не обозначил ожидаемый следующий шаг.');
   }
 
   return lowPriorityReasons;
@@ -386,6 +470,12 @@ function buildStopSignals(opportunity, state, decision) {
   }
   if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
     waitConditions.push('Сначала понять, доступна ли субаренда и укладывается ли она в маржу.');
+  }
+  if (state.states.some((item) => item.state_code === 'object_access_unclear')) {
+    waitConditions.push('Сначала уточнить доступ на объект, окна заезда и ограничения по площадке.');
+  }
+  if (!opportunity.price_context?.raw_value && state.states.some((item) => item.state_code === 'low_margin_warning')) {
+    waitConditions.push('Сначала уточнить ценовой контекст клиента, чтобы корректно пересчитать ставку.');
   }
   if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
     waitConditions.push('Сначала вручную подтвердить объект, технику и базовые условия запроса.');
@@ -434,6 +524,15 @@ function buildQueueItem(opportunity, state, decision) {
   }
   if (state.states.some((item) => item.state_code === 'spec_strong')) {
     signalMarkers.push('spec strong');
+  }
+  if (state.states.some((item) => item.state_code === 'client_intent_confirmed')) {
+    signalMarkers.push('client intent');
+  }
+  if (state.states.some((item) => item.state_code === 'price_context_known')) {
+    signalMarkers.push('price context');
+  }
+  if (state.states.some((item) => item.state_code === 'logistics_context_ready')) {
+    signalMarkers.push('logistics context');
   }
   if (state.states.some((item) => item.state_code === 'extraction_low_confidence')) {
     signalMarkers.push('verify extraction');
@@ -777,13 +876,176 @@ function toUrgencyBucket(timeScore) {
   return 'planned';
 }
 
+function getRegionHint(opportunity) {
+  return opportunity.geo_hint?.region
+    ?? opportunity.address?.normalized_value
+    ?? opportunity.address?.raw_value
+    ?? null;
+}
+
+function normalizeRegionLabel(region) {
+  const value = String(region ?? '').toLowerCase();
+  if (value.includes('моск')) return 'москва';
+  if (value.includes('мо') || value.includes('област')) return 'мо';
+  return value;
+}
+
+function findBestOwnUnit(opportunity) {
+  const dictionaries = getDictionariesOverview();
+  const units = dictionaries.own_equipment_units ?? [];
+  const equipmentType = String(opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? '').toLowerCase();
+  const equipmentModel = String(opportunity.equipment_model ?? '').toLowerCase();
+  const region = normalizeRegionLabel(getRegionHint(opportunity));
+
+  return units
+    .map((unit) => {
+      let score = 0;
+      if (String(unit.availability_status ?? '').toLowerCase() === 'available') score += 4;
+      if (String(unit.type_name ?? '').toLowerCase() === equipmentType) score += 3;
+      if (equipmentModel && String(unit.model ?? '').toLowerCase() === equipmentModel) score += 3;
+      if (region && normalizeRegionLabel(unit.region) === region) score += 2;
+      return { ...unit, score };
+    })
+    .filter((unit) => unit.score > 0)
+    .sort((left, right) => right.score - left.score)[0] ?? null;
+}
+
+function buildPartnerScore(opportunity, partner) {
+  const equipmentType = String(opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? '');
+  const region = normalizeRegionLabel(getRegionHint(opportunity));
+  let score = 0;
+  if ((partner.equipment_types ?? []).includes(equipmentType)) score += 4;
+  if (region && normalizeRegionLabel(partner.region) === region) score += 3;
+  score += Number(partner.reliability ?? 0) * 3;
+  score += Math.max(0, 2 - Number(partner.margin_pressure ?? 0) * 5);
+  score += Math.max(0, 2 - (Number(partner.shoulder_km ?? 999) / 30));
+  return Number(score.toFixed(2));
+}
+
+function findBestSubrentPartner(opportunity) {
+  const dictionaries = getDictionariesOverview();
+  const partners = dictionaries.subrent_partners ?? [];
+  return partners
+    .map((partner) => ({ ...partner, partner_score: buildPartnerScore(opportunity, partner) }))
+    .sort((left, right) => right.partner_score - left.partner_score)[0] ?? null;
+}
+
+function buildMarginPressure(opportunity) {
+  const margin = opportunity.economic_assessment?.expected_margin_percent ?? null;
+  if (margin === null || margin === undefined) return 'unknown';
+  if (margin < 10) return 'critical';
+  if (margin < 15) return 'high';
+  if (margin < 22) return 'medium';
+  return 'low';
+}
+
+function calculateOwnUnitEconomics(opportunity, unit) {
+  if (!unit) return null;
+  if (opportunity.economic_assessment?.own_equipment_available === false) return null;
+  const revenue = opportunity.economic_assessment?.expected_revenue_amount ?? null;
+  const ownCost = opportunity.economic_assessment?.own_cost_amount ?? null;
+  const mobilizationDistance = opportunity.economic_assessment?.mobilization_distance_km ?? null;
+  const busyPenalty = String(unit.availability_status ?? '').toLowerCase() === 'busy' ? 0.35 : 0;
+  const distancePenalty = mobilizationDistance ? Math.min(0.1, mobilizationDistance / 1000) : 0;
+  const estimatedMarginPercent = revenue && ownCost
+    ? Number((((revenue - ownCost) / revenue) * 100).toFixed(1))
+    : opportunity.economic_assessment?.expected_margin_percent ?? null;
+  const score = Number((((estimatedMarginPercent ?? 0) / 10) + 3 - busyPenalty * 10 - distancePenalty * 10).toFixed(2));
+  return {
+    mode: 'own_fleet',
+    estimated_margin_percent: estimatedMarginPercent,
+    mobilization_distance_km: mobilizationDistance,
+    availability_penalty: busyPenalty,
+    score,
+  };
+}
+
+function calculateSubrentEconomics(opportunity, partner) {
+  if (!partner) return null;
+  const revenue = opportunity.economic_assessment?.expected_revenue_amount ?? null;
+  const subrentCost = opportunity.economic_assessment?.subrent_cost_amount ?? null;
+  const estimatedMarginPercent = revenue && subrentCost
+    ? Number((((revenue - subrentCost) / revenue) * 100).toFixed(1))
+    : opportunity.economic_assessment?.expected_margin_percent ?? null;
+  const shoulderPenalty = Math.min(0.14, Number(partner.shoulder_km ?? 0) / 400);
+  const reliabilityBonus = Number(partner.reliability ?? 0) * 2;
+  const marginPenalty = Number(partner.margin_pressure ?? 0) * 10;
+  const score = Number((((estimatedMarginPercent ?? 0) / 10) + reliabilityBonus - shoulderPenalty * 10 - marginPenalty).toFixed(2));
+  return {
+    mode: 'subrent',
+    estimated_margin_percent: estimatedMarginPercent,
+    mobilization_distance_km: partner.shoulder_km ?? null,
+    shoulder_penalty: shoulderPenalty,
+    score,
+  };
+}
+
+function decideLogisticsEconomics(opportunity) {
+  const ownUnit = findBestOwnUnit(opportunity);
+  const partner = findBestSubrentPartner(opportunity);
+  const ownEconomics = calculateOwnUnitEconomics(opportunity, ownUnit);
+  const subrentEconomics = calculateSubrentEconomics(opportunity, partner);
+
+  if (ownEconomics && !subrentEconomics) {
+    return {
+      mode: ownEconomics.mode,
+      reason: 'Своя техника доступна, альтернативная субаренда не подтверждена.',
+      own_unit: ownUnit,
+      partner,
+      own_economics: ownEconomics,
+      subrent_economics: subrentEconomics,
+    };
+  }
+  if (!ownEconomics && subrentEconomics) {
+    return {
+      mode: subrentEconomics.mode,
+      reason: 'Подходящая своя техника не найдена, субаренда выглядит рабочим вариантом.',
+      own_unit: ownUnit,
+      partner,
+      own_economics: ownEconomics,
+      subrent_economics: subrentEconomics,
+    };
+  }
+  if (ownEconomics && subrentEconomics) {
+    const preferOwn = ownEconomics.score >= subrentEconomics.score;
+    return {
+      mode: preferOwn ? ownEconomics.mode : subrentEconomics.mode,
+      reason: preferOwn
+        ? `Своя техника выгоднее по score ${ownEconomics.score} против ${subrentEconomics.score}.`
+        : `Субаренда выгоднее по score ${subrentEconomics.score} против ${ownEconomics.score}.`,
+      own_unit: ownUnit,
+      partner,
+      own_economics: ownEconomics,
+      subrent_economics: subrentEconomics,
+    };
+  }
+
+  return {
+    mode: null,
+    reason: 'Недостаточно данных для экономического выбора.',
+    own_unit: ownUnit,
+    partner,
+    own_economics: ownEconomics,
+    subrent_economics: subrentEconomics,
+  };
+}
+
 function buildPartnerHint(opportunity, state) {
   const equipment = opportunity.equipment_type?.normalized_value ?? opportunity.equipment_type?.raw_value ?? 'технику';
+  const logistics = decideLogisticsEconomics(opportunity);
+  const ownUnit = logistics.own_unit;
+  const partner = logistics.partner;
   if (state.states.some((item) => item.state_code === 'hot_subrent_only')) {
+    if (partner) {
+      return `Подобрать субаренду под ${equipment}: приоритет ${partner.name}, плечо ${partner.shoulder_km} км, надежность ${Math.round((partner.reliability ?? 0) * 100)}%.`;
+    }
     return `Подобрать субаренду под ${equipment} и проверить плечо мобилизации.`;
   }
-  if (opportunity.economic_assessment?.own_equipment_available) {
-    return `Сначала резерв своей техники под ${equipment}.`;
+  if (opportunity.economic_assessment?.own_equipment_available && ownUnit) {
+    return `Сначала резерв своей техники под ${equipment}: ${ownUnit.registry_id} (${ownUnit.base_location}).`;
+  }
+  if (partner) {
+    return `Проверить доступность партнера ${partner.name} по ${equipment}.`;
   }
   return `Проверить доступность партнеров по ${equipment}.`;
 }
@@ -791,8 +1053,12 @@ function buildPartnerHint(opportunity, state) {
 function buildDemandClusterHint(opportunity) {
   const objectName = opportunity.project_object?.raw_value ?? null;
   const companyName = opportunity.company?.raw_value ?? null;
+  const region = getRegionHint(opportunity);
   if (objectName) {
     return `Сгруппировать запросы вокруг объекта "${objectName}".`;
+  }
+  if (region) {
+    return `Проверить накопленный спрос и перегруз по региону "${region}".`;
   }
   if (companyName) {
     return `Проверить повторный спрос у клиента "${companyName}".`;
@@ -807,6 +1073,9 @@ export async function buildLogisticsDashboard({ limit = 20, mode = '' } = {}) {
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
       const decision = decideNextAction(state, { action_effectiveness: actionEffectiveness });
+      const logistics = decideLogisticsEconomics(opportunity);
+      const bestPartner = logistics.partner;
+      const reserveUnit = logistics.own_unit;
       return {
         opportunity_id: opportunity.id,
         bitrix_deal_id: opportunity.bitrix_deal_id,
@@ -820,6 +1089,25 @@ export async function buildLogisticsDashboard({ limit = 20, mode = '' } = {}) {
         recommended_action: decision.recommended_action?.action_name ?? null,
         partner_hint: buildPartnerHint(opportunity, state),
         demand_cluster_hint: buildDemandClusterHint(opportunity),
+        economics_mode: logistics.mode,
+        economics_reason: logistics.reason,
+        recommended_partner: bestPartner ? {
+          name: bestPartner.name,
+          reliability_percent: Math.round((bestPartner.reliability ?? 0) * 100),
+          shoulder_km: bestPartner.shoulder_km ?? null,
+          score: bestPartner.partner_score,
+        } : null,
+        reserve_unit: reserveUnit ? {
+          registry_id: reserveUnit.registry_id,
+          model: reserveUnit.model,
+          base_location: reserveUnit.base_location,
+          availability_status: reserveUnit.availability_status,
+        } : null,
+        margin_pressure: buildMarginPressure(opportunity),
+        expected_margin_percent: opportunity.economic_assessment?.expected_margin_percent ?? null,
+        mobilization_distance_km: logistics.mode === 'subrent'
+          ? bestPartner?.shoulder_km ?? null
+          : opportunity.economic_assessment?.mobilization_distance_km ?? null,
         deadline_at: decision.deadline_at,
         state_codes: state.states.map((item) => item.state_code),
       };
@@ -850,6 +1138,17 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
     repository.listFailedIngestEvents(500),
   ]);
   const actionEffectiveness = new Map((feedback.action_metrics ?? []).map((item) => [item.action_code, item]));
+  const marginRiskCount = opportunities.filter((item) => {
+    const margin = item.economic_assessment?.expected_margin_percent ?? null;
+    return margin !== null && margin < 15;
+  }).length;
+  const strategicLoadReadyCount = opportunities.filter((item) => {
+    const state = evaluateOpportunityState(item);
+    return item.economic_assessment?.own_equipment_available === true
+      && state.states.some((entry) => entry.state_code === 'logistics_context_ready');
+  }).length;
+  const liveSupportCount = opportunities.filter((item) =>
+    item.graph_signals?.cross_sell_open || item.graph_signals?.competitor_present).length;
   const items = opportunities
     .map((opportunity) => {
       const state = evaluateOpportunityState(opportunity);
@@ -858,6 +1157,12 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
       const ownEquipment = opportunity.economic_assessment?.own_equipment_available ?? null;
       const subrentRequired = opportunity.economic_assessment?.subrent_required ?? null;
       const debtRisk = state.states.some((item) => item.state_code === 'debt_risk');
+      const logistics = decideLogisticsEconomics(opportunity);
+      const reserveUnit = logistics.own_unit;
+      const bestPartner = logistics.partner;
+      const logisticsReady = state.states.some((item) => item.state_code === 'logistics_context_ready');
+      const priceKnown = state.states.some((item) => item.state_code === 'price_context_known');
+      const marginPressure = buildMarginPressure(opportunity);
 
       let strategyFlag = 'monitor';
       let ownerSignal = 'Без стратегического отклонения.';
@@ -875,12 +1180,24 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
         strategyFlag = 'fleet_priority';
         ownerSignal = 'Есть шанс загрузить свою технику.';
       }
+      if (marginPressure === 'critical' || marginPressure === 'high') {
+        ownerSignal = `${ownerSignal} Давление на маржу: ${marginPressure}.`;
+      }
+      if (logistics.mode) {
+        ownerSignal = `${ownerSignal} Режим экономики: ${logistics.mode}.`;
+      }
 
       const signalMarkers = [
         ...(state.states.some((item) => item.state_code === 'client_ready_for_contract') ? ['contract ready'] : []),
         ...(state.states.some((item) => item.state_code === 'decision_maker_reached') ? ['decision access'] : []),
         ...(state.states.some((item) => item.state_code === 'spec_strong') ? ['spec strong'] : []),
         ...(state.states.some((item) => item.state_code === 'extraction_low_confidence') ? ['verify extraction'] : []),
+        ...(reserveUnit ? [`reserve ${reserveUnit.registry_id}`] : []),
+        ...(bestPartner ? [`partner ${bestPartner.name}`] : []),
+        ...(logistics.mode ? [`mode ${logistics.mode}`] : []),
+        ...(logisticsReady ? ['logistics ready'] : []),
+        ...(priceKnown ? ['price known'] : []),
+        ...(marginPressure !== 'low' && marginPressure !== 'unknown' ? [`margin ${marginPressure}`] : []),
       ];
 
       return {
@@ -896,6 +1213,9 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
         owner_signal: ownerSignal,
         recommended_action: decision.recommended_action?.action_name ?? null,
         signal_markers: signalMarkers,
+        reserve_unit: reserveUnit ? reserveUnit.registry_id : null,
+        recommended_partner: bestPartner?.name ?? null,
+        margin_pressure: marginPressure,
       };
     })
     .filter((item) => {
@@ -910,6 +1230,8 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
   const subrentCount = opportunities.filter((item) => item.economic_assessment?.subrent_required === true).length;
   const debtRiskCount = opportunities.filter((item) =>
     (item.financial_risk?.debt_overdue_days ?? 0) > 0 || item.financial_risk?.credit_limit_blocked).length;
+  const reserveCoverageCount = opportunities.filter((item) => findBestOwnUnit(item)).length;
+  const partnerCoverageCount = opportunities.filter((item) => findBestSubrentPartner(item)).length;
   const confidenceGuardCount = opportunities.filter((item) =>
     evaluateOpportunityState(item).states.some((state) => state.state_code === 'extraction_low_confidence')).length;
   const avgMarginSource = opportunities
@@ -929,8 +1251,13 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
       own_equipment_share: Math.round((ownEquipmentCount / totalOpportunities) * 100),
       subrent_dependency_share: Math.round((subrentCount / totalOpportunities) * 100),
       debt_exposure_share: Math.round((debtRiskCount / totalOpportunities) * 100),
+      reserve_coverage_share: Math.round((reserveCoverageCount / totalOpportunities) * 100),
+      partner_coverage_share: Math.round((partnerCoverageCount / totalOpportunities) * 100),
       confidence_guard_share: Math.round((confidenceGuardCount / totalOpportunities) * 100),
       average_margin_percent: averageMargin,
+      margin_risk_share: Math.round((marginRiskCount / totalOpportunities) * 100),
+      strategic_load_ready_share: Math.round((strategicLoadReadyCount / totalOpportunities) * 100),
+      live_support_share: Math.round((liveSupportCount / totalOpportunities) * 100),
       recommendation_accepted_rate: Math.round((feedback.summary?.accepted_rate ?? 0) * 100),
       recommendation_executed_rate: Math.round((feedback.summary?.executed_rate ?? 0) * 100),
       ingest_failed_events: failedIngestCount,
@@ -942,7 +1269,7 @@ export async function buildOwnerDashboard({ limit = 20, strategy = '' } = {}) {
 }
 
 export async function buildSystemStatusDashboard() {
-  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics, httpCheck, appMetadata] = await Promise.all([
+  const [vectorStatus, graphStatus, pendingIngest, failedIngest, diagnostics, httpCheck, appMetadata, opportunities, feedback] = await Promise.all([
     getQdrantStatus(),
     getNeo4jStatus(),
     repository.listPendingIngestEvents?.(20) ?? [],
@@ -950,6 +1277,8 @@ export async function buildSystemStatusDashboard() {
     repository.getSystemDiagnostics?.() ?? {},
     checkLocalHttpHealth(),
     getAppMetadata(),
+    repository.listOpportunities(),
+    repository.getFeedbackLearningSummary(50),
   ]);
 
   let postgres = {
@@ -989,7 +1318,7 @@ export async function buildSystemStatusDashboard() {
 
   const warnings = [];
   if (!postgres.reachable && postgres.configured) warnings.push('postgres_unreachable');
-  if (vectorStatus.configured && !vectorStatus.enabled) warnings.push('qdrant_unreachable');
+  if (vectorStatus.configured && !vectorStatus.reachable) warnings.push('qdrant_unreachable');
   if (graphStatus.configured && !graphStatus.reachable) warnings.push('neo4j_unreachable');
   if (!httpCheck.reachable) warnings.push('app_http_unreachable');
   if ((httpCheck.latency_ms ?? 0) > 500) warnings.push('app_http_slow');
@@ -1000,6 +1329,10 @@ export async function buildSystemStatusDashboard() {
   const overallState = warnings.length
     ? (warnings.some((item) => item.endsWith('unreachable') || item === 'ingest_stale') ? 'degraded' : 'attention')
     : 'healthy';
+  const totalOpportunities = opportunities.length || 1;
+  const vectorLiveCount = opportunities.filter((item) => item.commercial_stage === 'won' || item.commercial_stage === 'lost').length;
+  const graphLiveCount = opportunities.filter((item) =>
+    item.graph_signals?.cross_sell_open || item.graph_signals?.competitor_present).length;
   const systemStatus = {
     postgres,
     qdrant: vectorStatus,
@@ -1033,6 +1366,16 @@ export async function buildSystemStatusDashboard() {
       latest_audit_at: diagnostics.latest_audit_at ?? null,
       latest_audit_age_min: latestAuditMinutes,
     },
+    learning: {
+      readiness: feedback.summary?.learning_readiness ?? 'cold',
+      total_feedback: feedback.summary?.total_feedback ?? 0,
+      top_promote_action: feedback.summary?.top_promote_action ?? null,
+      top_suppress_action: feedback.summary?.top_suppress_action ?? null,
+    },
+    live_support: {
+      vector_live_share: Math.round((vectorLiveCount / totalOpportunities) * 100),
+      graph_live_share: Math.round((graphLiveCount / totalOpportunities) * 100),
+    },
     overall_state: overallState,
     warnings,
   };
@@ -1040,7 +1383,16 @@ export async function buildSystemStatusDashboard() {
   return {
     ...systemStatus,
     readiness: deriveReadiness(systemStatus),
+    operational_checklist: buildOperationalChecklist(systemStatus),
   };
+}
+
+async function buildOpportunityGraphLiveFirst(opportunity) {
+  const liveGraph = await getOpportunityGraphFromNeo4j(opportunity.id);
+  if (liveGraph?.nodes?.length) {
+    return liveGraph;
+  }
+  return buildOpportunityGraph(opportunity);
 }
 
 export async function buildManagerQueue({ limit = 20, bucket = '', state = '', mode = '', search = '' } = {}) {
@@ -1086,7 +1438,7 @@ export async function buildOpportunityCard(opportunityId) {
   const stateHistory = await repository.listStateSnapshots(opportunityId);
   const recommendationsHistory = await repository.listRecommendations(opportunityId);
   const feedbackHistory = await repository.listFeedbackForOpportunity(opportunityId);
-  const graph = buildOpportunityGraph(opportunity);
+  const graph = await buildOpportunityGraphLiveFirst(opportunity);
   const similarCases = await getSimilarCases(opportunity, repository);
   const riskEvidence = collectSignalEvidence(opportunity);
   const extractionQuality = buildExtractionQuality(opportunity);
@@ -1103,9 +1455,11 @@ export async function buildOpportunityCard(opportunityId) {
     action_effectiveness: actionEffectiveness.get(item.action_code ?? '') ?? null,
   }));
   const decisionSupportMarkers = [
+    ...(graph.source === 'neo4j' ? ['graph:neo4j_live'] : []),
     ...(opportunity.graph_signals?.cross_sell_open ? ['graph:cross_sell'] : []),
     ...(opportunity.graph_signals?.competitor_present ? ['graph:competitor'] : []),
     ...(topSimilarCase ? [`semantic:${topSimilarCase.source ?? 'similar_case'}`] : []),
+    ...(topSimilarCase?.source_mode === 'qdrant' ? ['semantic:qdrant_live'] : []),
     ...(recommendedActionEffectiveness ? ['learning:feedback_history'] : []),
   ];
   const decisionSupportLevel = decisionSupportMarkers.length >= 3
@@ -1166,8 +1520,10 @@ export async function buildOpportunityCard(opportunityId) {
     },
     decision_support: {
       support_level: decisionSupportLevel,
-      graph_support: Boolean(opportunity.graph_signals?.cross_sell_open || opportunity.graph_signals?.competitor_present),
+      graph_support: Boolean(graph?.nodes?.length),
+      graph_source: graph.source ?? 'fallback',
       semantic_support: Boolean(topSimilarCase),
+      semantic_source: topSimilarCase?.source_mode ?? null,
       learning_support: Boolean(recommendedActionEffectiveness),
       confidence_guard: state.states.some((item) => item.state_code === 'extraction_low_confidence'),
       support_markers: decisionSupportMarkers,
@@ -1188,7 +1544,8 @@ export async function buildOpportunityCard(opportunityId) {
       total: similarCases.length,
       primary_source: topSimilarCase?.source ?? null,
       sources: similarCaseSources,
-      vector_live: similarCaseSources.some((source) => source !== 'heuristic'),
+      vector_live: similarCases.some((item) => item.source_mode === 'qdrant'),
+      support_level: topSimilarCase?.support_level ?? null,
     },
     similar_cases: similarCases,
     recommendations_history: recommendationsHistory,
@@ -1300,6 +1657,11 @@ export function buildOpportunityGraph(opportunity) {
     object_id: opportunity.project_object?.resolved_entity_id ?? null,
     nodes: dedupedNodes,
     edges: dedupedEdges,
+    source: 'fallback',
+    summary: {
+      nodes_count: dedupedNodes.length,
+      edges_count: dedupedEdges.length,
+    },
   };
 }
 
@@ -1315,10 +1677,16 @@ function buildQualityIssues(opportunity) {
   if (!opportunity.last_touch_at) issues.push('last_touch_missing');
   if (!(opportunity.communication_events ?? []).length) issues.push('no_linked_events');
   if (!(opportunity.communication_events ?? []).some((item) => item.channel)) issues.push('channel_missing');
+  if (!opportunity.geo_hint?.normalized_value && !opportunity.address?.normalized_value) issues.push('geo_hint_missing');
+  if (!opportunity.client_expected_next_step && !opportunity.next_step?.code) issues.push('client_next_step_missing');
+  if (!opportunity.payment_readiness || opportunity.payment_readiness === 'early') issues.push('payment_readiness_weak');
+  if (!['decision_maker', 'influencer'].includes(opportunity.decision_access_status ?? 'unknown')) issues.push('decision_access_unknown');
   const extractionQuality = buildExtractionQuality(opportunity);
   if (extractionQuality.low_confidence_fields.includes('object')) issues.push('object_low_confidence');
   if (extractionQuality.low_confidence_fields.includes('equipment')) issues.push('equipment_low_confidence');
   if (extractionQuality.low_confidence_fields.includes('person')) issues.push('person_low_confidence');
+  if (extractionQuality.low_confidence_fields.includes('geo')) issues.push('geo_low_confidence');
+  if (extractionQuality.low_confidence_fields.includes('price')) issues.push('price_low_confidence');
   if (evaluateOpportunityState(opportunity).states.some((item) => item.state_code === 'extraction_low_confidence')) {
     issues.push('confidence_guard_active');
   }
@@ -1389,6 +1757,13 @@ export async function buildDataQualityDashboard() {
     (item.communication_events ?? []).some((event) => (event.extraction_json?.competitor?.confidence ?? 0) > 0)).length;
   const actionsWithExecutionLog = opportunities.filter((item) =>
     Array.isArray(item.communication_events) && item.communication_events.length > 0).length;
+  const opportunitiesWithClientIntent = opportunities.filter((item) => item.client_expected_next_step).length;
+  const opportunitiesWithPriceContext = opportunities.filter((item) => item.price_context?.raw_value).length;
+  const opportunitiesWithLogisticsContext = opportunities.filter((item) => (item.work_conditions?.length ?? 0) > 0).length;
+  const opportunitiesWithGeoHint = opportunities.filter((item) => item.geo_hint?.normalized_value || item.address?.normalized_value).length;
+  const opportunitiesWithPaymentReadiness = opportunities.filter((item) => item.payment_readiness && item.payment_readiness !== 'early').length;
+  const opportunitiesWithDecisionAccess = opportunities.filter((item) => ['decision_maker', 'influencer'].includes(item.decision_access_status ?? 'unknown')).length;
+  const opportunitiesWithNextStepSignal = opportunities.filter((item) => item.client_expected_next_step || item.next_step?.code || item.next_step?.description).length;
   const coverageMetrics = [
     {
       field_code: 'client',
@@ -1444,6 +1819,24 @@ export async function buildDataQualityDashboard() {
       filled_count: opportunities.filter((item) => item.next_step?.code || item.next_step?.description).length,
       target_percent: 95,
     },
+    {
+      field_code: 'geo_hint',
+      label: 'Гео-контекст',
+      filled_count: opportunitiesWithGeoHint,
+      target_percent: 80,
+    },
+    {
+      field_code: 'payment_readiness',
+      label: 'Готовность к оплате',
+      filled_count: opportunitiesWithPaymentReadiness,
+      target_percent: 80,
+    },
+    {
+      field_code: 'decision_access',
+      label: 'Доступ к роли',
+      filled_count: opportunitiesWithDecisionAccess,
+      target_percent: 75,
+    },
   ].map((item) => {
     const filledPercent = Math.round((item.filled_count / totalOpportunities) * 100);
     return {
@@ -1488,6 +1881,13 @@ export async function buildDataQualityDashboard() {
       linked_opportunity_unit_percent: Math.round((opportunitiesLinkedToUnit / totalOpportunities) * 100),
       competitor_confidence_percent: competitorSignals ? Math.round((competitorWithConfidence / competitorSignals) * 100) : 100,
       execution_log_percent: Math.round((actionsWithExecutionLog / totalOpportunities) * 100),
+      client_intent_percent: Math.round((opportunitiesWithClientIntent / totalOpportunities) * 100),
+      price_context_percent: Math.round((opportunitiesWithPriceContext / totalOpportunities) * 100),
+      logistics_context_percent: Math.round((opportunitiesWithLogisticsContext / totalOpportunities) * 100),
+      geo_hint_percent: Math.round((opportunitiesWithGeoHint / totalOpportunities) * 100),
+      payment_readiness_percent: Math.round((opportunitiesWithPaymentReadiness / totalOpportunities) * 100),
+      decision_access_percent: Math.round((opportunitiesWithDecisionAccess / totalOpportunities) * 100),
+      next_step_signal_percent: Math.round((opportunitiesWithNextStepSignal / totalOpportunities) * 100),
       opportunities_without_next_step: withoutNextStep,
       opportunities_missing_equipment: missingEquipment,
       failed_ingest_events: ingestFailedCount,
@@ -1517,6 +1917,21 @@ export async function buildDataQualityDashboard() {
           code: 'action_execution_log_rate',
           actual_percent: Math.round((actionsWithExecutionLog / totalOpportunities) * 100),
           target_percent: 95,
+        },
+        {
+          code: 'geo_hint_rate',
+          actual_percent: Math.round((opportunitiesWithGeoHint / totalOpportunities) * 100),
+          target_percent: 80,
+        },
+        {
+          code: 'payment_readiness_rate',
+          actual_percent: Math.round((opportunitiesWithPaymentReadiness / totalOpportunities) * 100),
+          target_percent: 80,
+        },
+        {
+          code: 'decision_access_rate',
+          actual_percent: Math.round((opportunitiesWithDecisionAccess / totalOpportunities) * 100),
+          target_percent: 75,
         },
       ].map((item) => ({
         ...item,
