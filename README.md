@@ -23,8 +23,44 @@ cp .env.example .env
 
 - `QDRANT_URL`
 - `BITRIX24_WEBHOOK_URL` уже заполнен вашим webhook
+- для live-контура также понадобятся `DATABASE_URL` и `NEO4J_URI/NEO4J_USERNAME/NEO4J_PASSWORD`
 
 `QDRANT_API_KEY` нужен только если ваш Qdrant защищен ключом.
+
+## Production Stack
+
+Для локального или серверного live-контура теперь есть [docker-compose.yml](/Users/arlekinoo07/Documents/New%20project/docker-compose.yml):
+
+```bash
+docker compose up -d
+```
+
+Это поднимет:
+
+- `PostgreSQL`
+- `Qdrant`
+- `Neo4j`
+
+Базовая связка env для такого запуска уже добавлена в `.env.example`.
+
+После старта live-контура рекомендуемый порядок такой:
+
+```bash
+npm run db:init
+npm run db:seed
+npm run sync:postgres
+npm run sync:qdrant:dss
+npm run sync:neo4j:dss
+npm run serve
+```
+
+Если нужен быстрый health-check по live-контуру:
+
+```bash
+curl http://127.0.0.1:3000/system/status
+curl http://127.0.0.1:3000/graph/status
+curl http://127.0.0.1:3000/vectors/status
+```
 
 ## Запуск sync в Qdrant
 
