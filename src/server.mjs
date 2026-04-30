@@ -179,6 +179,19 @@ function diffMinutesFromNow(value) {
   return Math.max(0, Math.round((Date.now() - timestamp) / 60000));
 }
 
+function pickLatestTimestamp(...values) {
+  const valid = values
+    .filter(Boolean)
+    .map((value) => {
+      const timestamp = new Date(value).getTime();
+      return Number.isNaN(timestamp) ? null : { value, timestamp };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.timestamp - left.timestamp);
+
+  return valid[0]?.value ?? null;
+}
+
 async function checkLocalHttpHealth() {
   const targetHost = HOST === '0.0.0.0' ? '127.0.0.1' : HOST;
   const startedAt = Date.now();
@@ -1306,13 +1319,24 @@ export async function buildSystemStatusDashboard() {
   const latestRecommendationMinutes = diffMinutesFromNow(diagnostics.latest_recommendation_at ?? null);
   const latestAuditMinutes = diffMinutesFromNow(diagnostics.latest_audit_at ?? null);
   const uptimeMinutes = diffMinutesFromNow(APP_STARTED_AT);
+  const latestOpportunityTouchAt = opportunities
+    .map((item) => pickLatestTimestamp(item.last_touch_at, item.next_step?.due_at))
+    .filter(Boolean)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? null;
+  const latestOperationalTouchAt = pickLatestTimestamp(
+    diagnostics.latest_processed_ingest_at ?? null,
+    latestOpportunityTouchAt,
+    diagnostics.latest_recommendation_at ?? null,
+    diagnostics.latest_audit_at ?? null,
+  );
+  const latestOperationalTouchMinutes = diffMinutesFromNow(latestOperationalTouchAt);
 
   let freshnessState = 'active';
-  if (!diagnostics.latest_processed_ingest_at) {
+  if (!latestOperationalTouchAt) {
     freshnessState = 'idle';
-  } else if (latestProcessedMinutes !== null && latestProcessedMinutes > 180) {
+  } else if (latestOperationalTouchMinutes !== null && latestOperationalTouchMinutes > 180) {
     freshnessState = 'stale';
-  } else if (latestProcessedMinutes !== null && latestProcessedMinutes > 60) {
+  } else if (latestOperationalTouchMinutes !== null && latestOperationalTouchMinutes > 60) {
     freshnessState = 'warming';
   }
 
@@ -1330,9 +1354,17 @@ export async function buildSystemStatusDashboard() {
     ? (warnings.some((item) => item.endsWith('unreachable') || item === 'ingest_stale') ? 'degraded' : 'attention')
     : 'healthy';
   const totalOpportunities = opportunities.length || 1;
-  const vectorLiveCount = opportunities.filter((item) => item.commercial_stage === 'won' || item.commercial_stage === 'lost').length;
-  const graphLiveCount = opportunities.filter((item) =>
-    item.graph_signals?.cross_sell_open || item.graph_signals?.competitor_present).length;
+  const vectorPointCounts = Array.isArray(vectorStatus.collections)
+    ? vectorStatus.collections.map((item) => Number(item.points_count ?? 0)).filter((value) => Number.isFinite(value) && value > 0)
+    : [];
+  const vectorCoverageBase = vectorPointCounts.length ? Math.max(...vectorPointCounts) : 0;
+  const vectorLiveShare = vectorStatus.reachable
+    ? Math.min(100, Math.round((vectorCoverageBase / totalOpportunities) * 100))
+    : 0;
+  const graphNodeCount = Number(graphStatus.nodes_count ?? 0);
+  const graphLiveShare = graphStatus.reachable
+    ? Math.min(100, Math.round((graphNodeCount / totalOpportunities) * 100))
+    : 0;
   const systemStatus = {
     postgres,
     qdrant: vectorStatus,
@@ -1344,8 +1376,10 @@ export async function buildSystemStatusDashboard() {
       latest_ingest_at: diagnostics.latest_ingest_at ?? null,
       latest_processed_ingest_at: diagnostics.latest_processed_ingest_at ?? null,
       latest_issue_at: diagnostics.latest_ingest_issue_at ?? null,
+      latest_operational_touch_at: latestOperationalTouchAt,
       freshness_state: freshnessState,
       latest_processed_age_min: latestProcessedMinutes,
+      latest_operational_touch_age_min: latestOperationalTouchMinutes,
       latest_issue_age_min: latestIssueMinutes,
     },
     app: {
@@ -1373,8 +1407,10 @@ export async function buildSystemStatusDashboard() {
       top_suppress_action: feedback.summary?.top_suppress_action ?? null,
     },
     live_support: {
-      vector_live_share: Math.round((vectorLiveCount / totalOpportunities) * 100),
-      graph_live_share: Math.round((graphLiveCount / totalOpportunities) * 100),
+      vector_live_share: vectorLiveShare,
+      graph_live_share: graphLiveShare,
+      vector_points_max: vectorCoverageBase,
+      graph_nodes_count: graphNodeCount,
     },
     overall_state: overallState,
     warnings,
