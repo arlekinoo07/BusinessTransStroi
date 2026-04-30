@@ -1764,7 +1764,8 @@ export class PostgresOpportunityRepository {
         const recalculated = result.opportunity_external_id
           ? await this.refreshOpportunityAfterIngest(result.opportunity_external_id)
           : null;
-        const suspicious = result.match_diagnostics?.suspicious === true;
+        const matchDiagnostics = result.match_diagnostics ?? {};
+        const suspicious = matchDiagnostics.suspicious === true;
         await query(
           `
             UPDATE ingest_events
@@ -1778,9 +1779,9 @@ export class PostgresOpportunityRepository {
             ingestEvent.id,
             suspicious ? 'suspicious' : 'processed',
             suspicious
-              ? `Suspicious ${result.match_diagnostics.match_type} match (score=${result.match_diagnostics.match_score})${(result.match_diagnostics.alias_matches ?? []).length ? ` · accepted normalization alias: ${(result.match_diagnostics.alias_matches ?? []).join(', ')}` : ''}`
-              : (result.match_diagnostics.alias_matches ?? []).length
-                ? `Accepted normalization alias used: ${(result.match_diagnostics.alias_matches ?? []).join(', ')}`
+              ? `Suspicious ${matchDiagnostics.match_type} match (score=${matchDiagnostics.match_score})${(matchDiagnostics.alias_matches ?? []).length ? ` · accepted normalization alias: ${(matchDiagnostics.alias_matches ?? []).join(', ')}` : ''}`
+              : (matchDiagnostics.alias_matches ?? []).length
+                ? `Accepted normalization alias used: ${(matchDiagnostics.alias_matches ?? []).join(', ')}`
                 : null,
           ],
         );
