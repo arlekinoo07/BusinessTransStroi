@@ -1,3 +1,5 @@
+import { domainArchitecture, getDomainByName, getDomains } from '/app/domain-architecture.js';
+
 const els = {
   refreshAll: document.querySelector('#refreshAll'),
   loadFirstCard: document.querySelector('#loadFirstCard'),
@@ -17,6 +19,11 @@ const els = {
   userRole: document.querySelector('#userRole'),
   cardIdInput: document.querySelector('#cardIdInput'),
   heroStats: document.querySelector('#heroStats'),
+  architectureIntro: document.querySelector('#architectureIntro'),
+  architectureMap: document.querySelector('#architectureMap'),
+  domainSelector: document.querySelector('#domainSelector'),
+  domainCards: document.querySelector('#domainCards'),
+  domainFocus: document.querySelector('#domainFocus'),
   queueList: document.querySelector('#queueList'),
   ropList: document.querySelector('#ropList'),
   qualitySummary: document.querySelector('#qualitySummary'),
@@ -42,6 +49,9 @@ const els = {
 const uiState = {
   currentCardId: 'opp-1001',
   auth: null,
+  activeDomain: 'Финансы',
+  domainLiveData: {},
+  domainLiveGeneratedAt: null,
 };
 
 async function api(path, options) {
@@ -67,6 +77,260 @@ function formatDateTime(value) {
 
 function badgeClass(bucket) {
   return `badge badge-${bucket}`;
+}
+
+function renderListBadges(items, tone = 'low') {
+  return items.map((item) => `<span class="badge badge-${tone}">${item}</span>`).join('');
+}
+
+function getDomainTone(accent) {
+  if (accent === 'finance') return 'high';
+  if (accent === 'marketing') return 'medium';
+  if (accent === 'sales') return 'critical';
+  return 'low';
+}
+
+function buildDomainHealthSnapshot(kpis) {
+  const critical = kpis.filter((item) => item.tone === 'critical').length;
+  const high = kpis.filter((item) => item.tone === 'high').length;
+  const medium = kpis.filter((item) => item.tone === 'medium').length;
+
+  let state = 'stable';
+  if (critical > 0) state = 'critical';
+  else if (high > 1) state = 'attention';
+  else if (high > 0 || medium > 2) state = 'watch';
+
+  return { critical, high, medium, state };
+}
+
+function renderDomainFocus(domain) {
+  if (!domain) return;
+
+  const panelItems = (domain.panels ?? [])
+    .map((code) => domainArchitecture.panels[code])
+    .filter(Boolean);
+  const { meta, architecture, dashboard } = domain;
+  const liveData = uiState.domainLiveData[domain.name] ?? {};
+  const effectiveKpis = liveData.kpis ?? dashboard.kpis;
+  const liveSummary = liveData.summary ?? meta.executiveSummary;
+  const health = buildDomainHealthSnapshot(effectiveKpis);
+  const highlightedKpis = effectiveKpis.filter((item) => item.tone === 'critical' || item.tone === 'high');
+  const liveStamp = uiState.domainLiveGeneratedAt ? formatDateTime(uiState.domainLiveGeneratedAt) : '—';
+
+  els.domainFocus.innerHTML = `
+    <article class="domain-focus-card domain-focus-${domain.accent}">
+      <div class="domain-focus-hero">
+        <div>
+          <p class="panel-kicker">Focus Domain</p>
+          <h3>${domain.name}</h3>
+          <p class="domain-role">${meta.storyline}</p>
+        </div>
+        <div class="focus-meta">
+          <div class="focus-meta-item">
+            <span class="domain-label">Кому нужен блок</span>
+            <strong>${meta.audience}</strong>
+          </div>
+          <div class="focus-meta-item">
+            <span class="domain-label">Целевой результат</span>
+            <strong>${architecture.outcomes[0]}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="focus-grid">
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Executive summary</span>
+          <p>${liveSummary}</p>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Health Snapshot</span>
+          <div class="focus-health-row">
+            <article class="focus-health-card">
+              <span class="stat-label">Domain State</span>
+              <strong>${health.state}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Critical KPIs</span>
+              <strong>${health.critical}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">High KPIs</span>
+              <strong>${health.high}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Updated</span>
+              <strong>${liveStamp}</strong>
+            </article>
+          </div>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Мини-дашборд домена</span>
+          <div class="focus-kpi-grid">
+            ${effectiveKpis.map((item) => `
+              <article class="focus-kpi-card">
+                <span class="stat-label">${item.label}</span>
+                <strong>${item.value}</strong>
+                <span class="badge badge-${item.tone}">${domain.name}</span>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Priority Alerts</span>
+          <div class="badge-row">
+            ${highlightedKpis.length
+              ? highlightedKpis.map((item) => `<span class="badge badge-${item.tone}">${item.label}: ${item.value}</span>`).join('')
+              : '<span class="badge badge-low">Критичных сигналов по домену сейчас нет</span>'}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Как это работает на сайте</span>
+          <p>
+            Сначала система считывает <strong>${architecture.sensors.slice(0, 2).join(' и ')}</strong>,
+            затем агрегирует их в состояния уровня S3 и только после этого поднимает решения и эскалации
+            для роли <strong>${meta.audience.split(',')[0]}</strong>.
+          </p>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Где смотреть на этой странице</span>
+          <div class="focus-link-list">
+            ${panelItems.map((panel) => `
+              <button class="focus-link" type="button" data-panel-target="${panel.target}">
+                <span class="focus-link-title">${panel.title}</span>
+                <span class="focus-link-subtitle">Перейти к связанному operational-блоку</span>
+              </button>
+            `).join('')}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Ожидаемые решения</span>
+          <div class="badge-row">${renderListBadges(architecture.decisions, 'critical')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Ключевые состояния</span>
+          <div class="badge-row">${renderListBadges(architecture.states, 'high')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Конечные эффекты</span>
+          <div class="badge-row">${renderListBadges(architecture.outcomes, 'low')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Основные риски для руководителя</span>
+          <div class="badge-row">${renderListBadges(architecture.risks, 'critical')}</div>
+        </section>
+      </div>
+    </article>
+  `;
+
+  document.querySelectorAll('[data-panel-target]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const target = document.getElementById(node.dataset.panelTarget);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function applyDomainPanelHighlight(domain) {
+  const activeCodes = new Set(domain?.panels ?? []);
+  document.querySelectorAll('[data-panel-code]').forEach((panel) => {
+    const isActive = activeCodes.has(panel.dataset.panelCode);
+    panel.classList.toggle('panel-domain-active', isActive);
+    panel.classList.toggle('panel-domain-muted', !isActive);
+  });
+}
+
+function renderArchitectureOverview() {
+  els.architectureIntro.innerHTML = `
+    <article class="architecture-story">
+      <div>
+        <p class="panel-kicker">Concept Core</p>
+        <h3>Сайт показывает не только очередь сделок, но и всю модель управленческой системы</h3>
+      </div>
+      <p class="hero-text">
+        Мы используем финансы как исходный контур и расширяем ту же архитектуру на маркетинг, продажи и производство.
+        Для каждого блока на сайте должна быть видна одна и та же логика: какие сигналы система читает,
+        в какие состояния их собирает и какие решения затем предлагает руководителям.
+      </p>
+    </article>
+  `;
+
+  els.architectureMap.innerHTML = `
+    <div class="architecture-rail">
+      ${domainArchitecture.model.stages.map((stage, index) => `
+        <article class="architecture-stage">
+          <div class="architecture-stage-code">${stage.code}</div>
+          <div>
+            <h3>${stage.title}</h3>
+            <p>${stage.description}</p>
+          </div>
+          ${index < domainArchitecture.model.stages.length - 1 ? '<div class="architecture-arrow">→</div>' : ''}
+        </article>
+      `).join('')}
+    </div>
+  `;
+
+  els.domainSelector.innerHTML = `
+    <div class="domain-selector-bar">
+      ${getDomains().map((domain) => `
+        <button
+          class="domain-toggle ${uiState.activeDomain === domain.name ? 'domain-toggle-active' : ''}"
+          data-domain-name="${domain.name}"
+          type="button"
+        >
+          <span class="domain-toggle-title">${domain.name}</span>
+          <span class="domain-toggle-subtitle">${domain.architecture.processes[0]} · ${domain.architecture.states[0]}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  els.domainCards.innerHTML = getDomains().map((domain) => `
+    <article class="domain-card domain-card-${domain.accent} ${uiState.activeDomain === domain.name ? 'domain-card-active' : ''}" data-domain-card="${domain.name}">
+      <div class="domain-card-head">
+        <div>
+          <p class="panel-kicker">Контур</p>
+          <h3>${domain.name}</h3>
+        </div>
+        <span class="badge badge-${getDomainTone(domain.accent)}">${domain.name}</span>
+      </div>
+      <p class="domain-role">${domain.meta.role}</p>
+      <div class="domain-stack">
+        <div class="domain-block">
+          <span class="domain-label">Процессы</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.processes, 'low')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Сенсоры S4</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.sensors, 'medium')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Состояния S3</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.states, 'high')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Решения S2</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.decisions, 'critical')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Индексы</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.indices, 'low')}</div>
+        </div>
+      </div>
+    </article>
+  `).join('');
+
+  const activeDomain = getDomainByName(uiState.activeDomain);
+  renderDomainFocus(activeDomain);
+  applyDomainPanelHighlight(activeDomain);
+
+  document.querySelectorAll('[data-domain-name], [data-domain-card]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.domainName ?? node.dataset.domainCard;
+      if (!domainName || uiState.activeDomain === domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+    });
+  });
 }
 
 function renderHeroStats(queueItems, ropItems, pendingItems, errorItems) {
@@ -1555,7 +1819,7 @@ async function loadLogisticsDashboard() {
   if (els.logisticsMode.value) params.set('mode', els.logisticsMode.value);
   const data = await api(`/dashboard/logistics?${params.toString()}`);
   renderLogisticsQueue(data.items);
-  return data.items;
+  return data;
 }
 
 async function loadOwnerDashboard() {
@@ -1563,7 +1827,7 @@ async function loadOwnerDashboard() {
   if (els.ownerStrategy.value) params.set('strategy', els.ownerStrategy.value);
   const payload = await api(`/dashboard/owner?${params.toString()}`);
   renderOwnerDashboard(payload);
-  return payload.items ?? [];
+  return payload;
 }
 
 async function loadSystemStatus() {
@@ -1578,11 +1842,35 @@ async function loadDictionaries() {
   return payload;
 }
 
+async function loadDomainSummary() {
+  try {
+    const payload = await api('/dashboard/domain-summary');
+    uiState.domainLiveData = payload.domains ?? {};
+    uiState.domainLiveGeneratedAt = payload.generated_at ?? null;
+    return payload;
+  } catch {
+    uiState.domainLiveData = {};
+    uiState.domainLiveGeneratedAt = null;
+    return { domains: {} };
+  }
+}
+
 async function refreshAll() {
   try {
+    renderArchitectureOverview();
     await loadAuthMe();
     const [queueItems, ropItems, monitor] = await Promise.all([loadQueue(), loadRopEscalations(), loadIngestMonitor()]);
-    await Promise.all([
+    const [
+      qualityPayload,
+      normalizationPayload,
+      feedbackPayload,
+      auditItems,
+      logisticsPayload,
+      ownerPayload,
+      systemPayload,
+      dictionaryPayload,
+      domainSummaryPayload,
+    ] = await Promise.all([
       loadDataQuality(),
       loadNormalizationDashboard(),
       loadFeedbackLearningDashboard(),
@@ -1591,7 +1879,9 @@ async function refreshAll() {
       loadOwnerDashboard(),
       loadSystemStatus(),
       loadDictionaries(),
+      loadDomainSummary(),
     ]);
+    renderArchitectureOverview();
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {
       els.cardIdInput.value = queueItems[0].opportunity_id;

@@ -42,7 +42,21 @@
       </header>
 
       <main class="layout">
-        <section class="panel panel-queue">
+        <section class="panel panel-architecture">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Architecture Layer</p>
+              <h2>Контуры управления для сайта</h2>
+            </div>
+          </div>
+          <div id="architectureIntro" class="architecture-intro"></div>
+          <div id="architectureMap" class="architecture-map"></div>
+          <div id="domainSelector" class="domain-selector"></div>
+          <div id="domainCards" class="domain-cards"></div>
+          <div id="domainFocus" class="domain-focus"></div>
+        </section>
+
+        <section class="panel panel-queue" id="panel-queue" data-panel-code="queue">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Manager Queue</p>
@@ -96,7 +110,7 @@
           <div id="queueList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-card">
+        <section class="panel panel-card" id="panel-card" data-panel-code="card">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Opportunity Card</p>
@@ -110,7 +124,7 @@
           <div id="cardView" class="card-view"></div>
         </section>
 
-        <section class="panel panel-monitor">
+        <section class="panel panel-monitor" id="panel-monitor" data-panel-code="monitor">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Ingest Monitor</p>
@@ -133,7 +147,7 @@
           </div>
         </section>
 
-        <section class="panel panel-rop">
+        <section class="panel panel-rop" id="panel-rop" data-panel-code="rop">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">ROP / Escalations</p>
@@ -155,7 +169,7 @@
           <div id="ropList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-quality" data-panel-code="quality">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Data Quality</p>
@@ -166,7 +180,7 @@
           <div id="qualityList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-normalization" data-panel-code="normalization">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Normalization</p>
@@ -188,7 +202,7 @@
           <div id="normalizationList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-feedback" data-panel-code="feedback">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Feedback Learning</p>
@@ -200,7 +214,7 @@
           <div id="feedbackRecentList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-audit" data-panel-code="audit">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Audit Log</p>
@@ -210,7 +224,7 @@
           <div id="auditList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-logistics">
+        <section class="panel panel-logistics" id="panel-logistics" data-panel-code="logistics">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Logistics / Subrent</p>
@@ -231,7 +245,7 @@
           <div id="logisticsList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-owner">
+        <section class="panel panel-owner" id="panel-owner" data-panel-code="owner">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Owner / Director</p>
@@ -254,7 +268,7 @@
           <div id="ownerList" class="queue-list"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-system" data-panel-code="system">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">System Status</p>
@@ -268,7 +282,7 @@
           <div id="systemStatusSummary" class="hero-stats"></div>
         </section>
 
-        <section class="panel panel-quality">
+        <section class="panel panel-quality" id="panel-dictionary" data-panel-code="dictionary">
           <div class="panel-head">
             <div>
               <p class="panel-kicker">Reference Layer</p>

@@ -2100,6 +2100,156 @@ export async function buildFeedbackLearningDashboard() {
   return repository.getFeedbackLearningSummary(12);
 }
 
+function buildFinanceDomainSummary({ queueItems, ropItems, ownerSummary, systemIngest, opportunities }) {
+  const financeItems = queueItems.filter((item) => item.state_codes?.includes('debt_risk'));
+  const marginRiskDeals = opportunities.filter((item) => {
+    const margin = item.economic_assessment?.expected_margin_percent ?? null;
+    return margin !== null && margin < 15;
+  }).length;
+  const blockedCredits = opportunities.filter((item) => item.financial_risk?.credit_limit_blocked).length;
+  const overdueDebtDeals = opportunities.filter((item) => (item.financial_risk?.debt_overdue_days ?? 0) > 0).length;
+  const readyForMoneyFlow = opportunities.filter((item) =>
+    item.payment_readiness === 'ready' || item.payment_readiness === 'ready_for_offer').length;
+
+  return {
+    summary: `Сейчас в финансовом контуре ${financeItems.length} сделок с риском по оплате или ограничениям, ${marginRiskDeals} сделок с давлением на маржу и ${ropItems.length} управленческих эскалаций.`,
+    kpis: [
+      { label: 'Debt Risk Deals', value: String(financeItems.length), tone: financeItems.length > 0 ? 'high' : 'low' },
+      { label: 'Avg Margin', value: ownerSummary.average_margin_percent !== null && ownerSummary.average_margin_percent !== undefined ? `${ownerSummary.average_margin_percent}%` : '—', tone: 'medium' },
+      { label: 'Debt Exposure', value: Number.isFinite(ownerSummary.debt_exposure_share) ? `${ownerSummary.debt_exposure_share}%` : '—', tone: 'high' },
+      { label: 'Ingest Freshness', value: systemIngest.freshness_state ?? '—', tone: systemIngest.freshness_state === 'stale' ? 'critical' : 'low' },
+      { label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low' },
+      { label: 'Credit Blocks', value: String(blockedCredits), tone: blockedCredits > 0 ? 'critical' : 'low' },
+      { label: 'Overdue Debt', value: String(overdueDebtDeals), tone: overdueDebtDeals > 0 ? 'high' : 'low' },
+      { label: 'Payment Ready', value: `${readyForMoneyFlow}/${opportunities.length || 0}`, tone: 'medium' },
+    ],
+  };
+}
+
+function buildMarketingDomainSummary({ qualitySummary, normalizationSummary, feedbackSummary }) {
+  const clientIntentPercent = qualitySummary.client_intent_percent ?? 0;
+  const priceContextPercent = qualitySummary.price_context_percent ?? 0;
+  const linkedEventsPercent = qualitySummary.linked_events_percent ?? 0;
+  const competitorConfidencePercent = qualitySummary.competitor_confidence_percent ?? 0;
+  const learningCoveragePercent = Math.round((feedbackSummary.recommendation_coverage ?? 0) * 100);
+  const duplicateCandidates = normalizationSummary.duplicate_candidates ?? 0;
+  const promoteAction = feedbackSummary.top_promote_action ?? '—';
+
+  return {
+    summary: `Маркетинговый контур сейчас опирается на полноту клиентского интента (${clientIntentPercent}%), ценовой контекст (${priceContextPercent}%) и покрытие обучением (${learningCoveragePercent}%). Также в системе ${duplicateCandidates} неразобранных дублей, которые искажают оценку спроса.`,
+    kpis: [
+      { label: 'Client Intent', value: Number.isFinite(clientIntentPercent) ? `${clientIntentPercent}%` : '—', tone: clientIntentPercent < 60 ? 'high' : 'medium' },
+      { label: 'Price Context', value: Number.isFinite(priceContextPercent) ? `${priceContextPercent}%` : '—', tone: priceContextPercent < 60 ? 'high' : 'low' },
+      { label: 'Linked Events', value: Number.isFinite(linkedEventsPercent) ? `${linkedEventsPercent}%` : '—', tone: linkedEventsPercent < 75 ? 'high' : 'low' },
+      { label: 'Competitor Signal', value: Number.isFinite(competitorConfidencePercent) ? `${competitorConfidencePercent}%` : '—', tone: 'medium' },
+      { label: 'Learning Coverage', value: `${learningCoveragePercent}%`, tone: learningCoveragePercent < 50 ? 'high' : 'medium' },
+      { label: 'Promote Action', value: String(promoteAction), tone: 'low' },
+      { label: 'Duplicate Candidates', value: String(duplicateCandidates), tone: duplicateCandidates > 0 ? 'high' : 'low' },
+      { label: 'Normalization Scope', value: String(normalizationSummary.companies_seen ?? 0), tone: 'low' },
+    ],
+  };
+}
+
+function buildSalesDomainSummary({ queueItems, ropItems, feedbackSummary, qualitySummary, opportunities }) {
+  const salesItems = queueItems.filter((item) =>
+    item.state_codes?.includes('hot_urgent') || item.state_codes?.includes('hot_unworked'));
+  const hotUrgentDeals = queueItems.filter((item) => item.state_codes?.includes('hot_urgent')).length;
+  const hotUnworkedDeals = queueItems.filter((item) => item.state_codes?.includes('hot_unworked')).length;
+  const marginRiskDeals = opportunities.filter((item) => {
+    const margin = item.economic_assessment?.expected_margin_percent ?? null;
+    return margin !== null && margin < 15;
+  }).length;
+  const paymentReadyDeals = opportunities.filter((item) =>
+    item.payment_readiness === 'ready' || item.payment_readiness === 'ready_for_offer').length;
+  const contractStageDeals = opportunities.filter((item) =>
+    item.commercial_stage === 'contract_requested' || item.commercial_stage === 'invoice_requested').length;
+
+  return {
+    summary: `В продажах сейчас ${salesItems.length} горячих сделок в очереди, из них ${hotUnworkedDeals} уже с риском SLA, ${marginRiskDeals} сделок под давлением по марже и ${ropItems.length} эскалаций.`,
+    kpis: [
+      { label: 'Hot Deals', value: String(salesItems.length), tone: salesItems.length > 0 ? 'high' : 'low' },
+      { label: 'Hot Urgent', value: String(hotUrgentDeals), tone: hotUrgentDeals > 0 ? 'high' : 'low' },
+      { label: 'SLA Risk', value: String(hotUnworkedDeals), tone: hotUnworkedDeals > 0 ? 'critical' : 'low' },
+      { label: 'Escalations', value: String(ropItems.length), tone: ropItems.length > 0 ? 'high' : 'low' },
+      { label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low' },
+      { label: 'Payment Ready', value: `${paymentReadyDeals}/${opportunities.length || 0}`, tone: 'medium' },
+      { label: 'Contract Stage', value: String(contractStageDeals), tone: contractStageDeals > 0 ? 'medium' : 'low' },
+      { label: 'Next Step Signal', value: Number.isFinite(qualitySummary.next_step_signal_percent) ? `${qualitySummary.next_step_signal_percent}%` : '—', tone: 'medium' },
+      { label: 'Accepted Rate', value: `${Math.round((feedbackSummary.accepted_rate ?? 0) * 100)}%`, tone: 'medium' },
+      { label: 'Executed Rate', value: `${Math.round((feedbackSummary.executed_rate ?? 0) * 100)}%`, tone: 'medium' },
+    ],
+  };
+}
+
+function buildOperationsDomainSummary({ queueItems, ownerSummary, qualitySummary }) {
+  const opsItems = queueItems.filter((item) =>
+    (item.signal_markers ?? []).some((marker) => String(marker).toLowerCase().includes('subrent')));
+  const urgentOpsItems = queueItems.filter((item) =>
+    item.state_codes?.includes('hot_subrent_only') || item.state_codes?.includes('hot_urgent')).length;
+  const ownFleetShare = ownerSummary.own_equipment_share ?? 0;
+  const subrentShare = ownerSummary.subrent_dependency_share ?? 0;
+  const reserveCoverage = ownerSummary.reserve_coverage_share ?? 0;
+  const partnerCoverage = ownerSummary.partner_coverage_share ?? 0;
+  const strategicLoadReady = ownerSummary.strategic_load_ready_share ?? 0;
+  const logisticsContext = qualitySummary.logistics_context_percent ?? 0;
+  const geoHint = qualitySummary.geo_hint_percent ?? 0;
+  const confidenceGuard = ownerSummary.confidence_guard_share ?? 0;
+
+  return {
+    summary: `Производственный контур сейчас показывает ${opsItems.length} сделок с операционным давлением, ${urgentOpsItems} срочных кейсов по субаренде/логистике и покрытие резерва ${reserveCoverage}%. Баланс собственного парка к субаренде: ${ownFleetShare}% / ${subrentShare}%.`,
+    kpis: [
+      { label: 'Ops Pressure', value: String(opsItems.length), tone: opsItems.length > 0 ? 'high' : 'low' },
+      { label: 'Urgent Ops', value: String(urgentOpsItems), tone: urgentOpsItems > 0 ? 'critical' : 'low' },
+      { label: 'Own Fleet Share', value: Number.isFinite(ownFleetShare) ? `${ownFleetShare}%` : '—', tone: 'medium' },
+      { label: 'Subrent Share', value: Number.isFinite(subrentShare) ? `${subrentShare}%` : '—', tone: subrentShare > 40 ? 'high' : 'medium' },
+      { label: 'Reserve Coverage', value: Number.isFinite(reserveCoverage) ? `${reserveCoverage}%` : '—', tone: reserveCoverage < 50 ? 'high' : 'medium' },
+      { label: 'Partner Coverage', value: Number.isFinite(partnerCoverage) ? `${partnerCoverage}%` : '—', tone: 'medium' },
+      { label: 'Load Ready', value: Number.isFinite(strategicLoadReady) ? `${strategicLoadReady}%` : '—', tone: 'medium' },
+      { label: 'Logistics Context', value: Number.isFinite(logisticsContext) ? `${logisticsContext}%` : '—', tone: logisticsContext < 60 ? 'high' : 'low' },
+      { label: 'Geo Hint', value: Number.isFinite(geoHint) ? `${geoHint}%` : '—', tone: 'low' },
+      { label: 'Confidence Guard', value: Number.isFinite(confidenceGuard) ? `${confidenceGuard}%` : '—', tone: confidenceGuard > 20 ? 'high' : 'low' },
+    ],
+  };
+}
+
+export async function buildDomainSummaryDashboard() {
+  const [
+    queueItems,
+    ropItems,
+    ownerDashboard,
+    qualityDashboard,
+    normalizationDashboard,
+    feedbackDashboard,
+    systemStatus,
+    opportunities,
+  ] = await Promise.all([
+    buildManagerQueue({ limit: 50 }),
+    buildRopEscalations({ limit: 50 }),
+    buildOwnerDashboard({ limit: 20 }),
+    buildDataQualityDashboard(),
+    buildNormalizationDashboard(),
+    buildFeedbackLearningDashboard(),
+    buildSystemStatusDashboard(),
+    repository.listOpportunities(),
+  ]);
+
+  const qualitySummary = qualityDashboard.summary ?? {};
+  const normalizationSummary = normalizationDashboard.summary ?? {};
+  const feedbackSummary = feedbackDashboard.summary ?? {};
+  const ownerSummary = ownerDashboard.summary ?? {};
+  const systemIngest = systemStatus.ingest ?? {};
+
+  return {
+    generated_at: new Date().toISOString(),
+    domains: {
+      'Финансы': buildFinanceDomainSummary({ queueItems, ropItems, ownerSummary, systemIngest, opportunities }),
+      'Маркетинг': buildMarketingDomainSummary({ qualitySummary, normalizationSummary, feedbackSummary }),
+      'Продажи': buildSalesDomainSummary({ queueItems, ropItems, feedbackSummary, qualitySummary, opportunities }),
+      'Производство': buildOperationsDomainSummary({ queueItems, ownerSummary, qualitySummary }),
+    },
+  };
+}
+
 export async function buildAuditDashboard(limit = 20) {
   return {
     items: await repository.listAuditLogs(limit),
@@ -2416,6 +2566,12 @@ export function createAppServer() {
         const denied = requirePermission(auth, 'dashboard.data_quality');
         if (denied) return sendJson(response, 403, denied);
         return sendJson(response, 200, await buildSystemStatusDashboard());
+      }
+
+      if (request.method === 'GET' && url.pathname === '/dashboard/domain-summary') {
+        const denied = requirePermission(auth, 'dashboard.manager');
+        if (denied) return sendJson(response, 403, denied);
+        return sendJson(response, 200, await buildDomainSummaryDashboard());
       }
 
       if (request.method === 'POST' && url.pathname === '/normalization/decision') {
