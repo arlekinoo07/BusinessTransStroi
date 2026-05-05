@@ -19,11 +19,16 @@ const els = {
   userRole: document.querySelector('#userRole'),
   cardIdInput: document.querySelector('#cardIdInput'),
   heroStats: document.querySelector('#heroStats'),
+  globalBrief: document.querySelector('#globalBrief'),
   architectureIntro: document.querySelector('#architectureIntro'),
   architectureMap: document.querySelector('#architectureMap'),
+  architectureExecutive: document.querySelector('#architectureExecutive'),
   domainSelector: document.querySelector('#domainSelector'),
   domainCards: document.querySelector('#domainCards'),
   domainFocus: document.querySelector('#domainFocus'),
+  domainShowcaseIntro: document.querySelector('#domainShowcaseIntro'),
+  domainShowcaseNav: document.querySelector('#domainShowcaseNav'),
+  domainShowcase: document.querySelector('#domainShowcase'),
   queueList: document.querySelector('#queueList'),
   ropList: document.querySelector('#ropList'),
   qualitySummary: document.querySelector('#qualitySummary'),
@@ -83,6 +88,39 @@ function renderListBadges(items, tone = 'low') {
   return items.map((item) => `<span class="badge badge-${tone}">${item}</span>`).join('');
 }
 
+function renderSignalCards(items, emptyText) {
+  if (!items?.length) {
+    return `<div class="empty">${emptyText}</div>`;
+  }
+
+  return `
+    <div class="focus-signal-list">
+      ${items.map((item) => `
+        <article class="focus-signal-card">
+          <div class="focus-signal-top">
+            <span class="badge badge-${item.tone ?? 'low'}">${item.tone ?? 'low'}</span>
+            ${item.value ? `<span class="focus-signal-value">${item.value}</span>` : ''}
+          </div>
+          <p>${item.label}</p>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderPanelLinks(panelCodes) {
+  return panelCodes
+    .map((code) => domainArchitecture.panels[code])
+    .filter(Boolean)
+    .map((panel) => `
+      <button class="focus-link" type="button" data-panel-target="${panel.target}">
+        <span class="focus-link-title">${panel.title}</span>
+        <span class="focus-link-subtitle">Открыть связанный operational-блок</span>
+      </button>
+    `)
+    .join('');
+}
+
 function getDomainTone(accent) {
   if (accent === 'finance') return 'high';
   if (accent === 'marketing') return 'medium';
@@ -94,13 +132,376 @@ function buildDomainHealthSnapshot(kpis) {
   const critical = kpis.filter((item) => item.tone === 'critical').length;
   const high = kpis.filter((item) => item.tone === 'high').length;
   const medium = kpis.filter((item) => item.tone === 'medium').length;
+  const down = kpis.filter((item) => item.trend === 'down').length;
+  const improved = kpis.filter((item) => item.trend === 'up' && (item.tone === 'low' || item.tone === 'medium')).length;
 
   let state = 'stable';
   if (critical > 0) state = 'critical';
   else if (high > 1) state = 'attention';
   else if (high > 0 || medium > 2) state = 'watch';
 
-  return { critical, high, medium, state };
+  return { critical, high, medium, down, improved, state };
+}
+
+function getTrendSymbol(trend) {
+  if (trend === 'up') return '↑';
+  if (trend === 'down') return '↓';
+  return '→';
+}
+
+function getDomainStateLabel(state) {
+  if (state === 'critical') return 'critical';
+  if (state === 'attention') return 'attention';
+  if (state === 'watch') return 'watch';
+  return 'stable';
+}
+
+function getStateNarrative(domainName, health) {
+  if (health.state === 'critical') {
+    return `${domainName} требует немедленного управленческого внимания: есть критичные сигналы или накопление high-risk KPI.`;
+  }
+  if (health.state === 'attention') {
+    return `${domainName} находится в зоне внимания: контур работает, но несколько KPI уже отклоняются от целевого режима.`;
+  }
+  if (health.state === 'watch') {
+    return `${domainName} пока контролируем, но часть метрик требует наблюдения и точечных решений.`;
+  }
+  return `${domainName} выглядит устойчиво: критичных сигналов нет, контур близок к целевому режиму работы.`;
+}
+
+function getKpiToneWeight(tone) {
+  if (tone === 'critical') return 4;
+  if (tone === 'high') return 3;
+  if (tone === 'medium') return 2;
+  return 1;
+}
+
+function getKpiPriorityScore(kpi) {
+  return getKpiToneWeight(kpi.tone) * 10 + (kpi.trend === 'down' ? 3 : 0) + (kpi.trend === 'up' && getKpiToneWeight(kpi.tone) >= 3 ? 2 : 0);
+}
+
+function buildKpiOverview(kpis) {
+  const sorted = [...kpis].sort((left, right) => getKpiPriorityScore(right) - getKpiPriorityScore(left));
+  const hot = sorted.slice(0, 3);
+  const improving = kpis.filter((item) => item.trend === 'up' && (item.tone === 'low' || item.tone === 'medium')).slice(0, 2);
+  return { hot, improving };
+}
+
+function summarizeDomainLive(domain) {
+  const liveData = uiState.domainLiveData[domain.name] ?? {};
+  const effectiveKpis = liveData.kpis ?? domain.dashboard.kpis ?? [];
+  const health = buildDomainHealthSnapshot(effectiveKpis);
+  const overview = buildKpiOverview(effectiveKpis);
+  const topAlert = overview.hot[0] ?? null;
+  const topDecision = (liveData.decisions ?? [])[0] ?? null;
+
+  return {
+    liveData,
+    effectiveKpis,
+    health,
+    overview,
+    topAlert,
+    topDecision,
+  };
+}
+
+function buildExecutiveAgenda() {
+  const domainSummaries = getDomains().map((domain) => ({
+    domain,
+    ...summarizeDomainLive(domain),
+  }));
+
+  const rankedDomains = [...domainSummaries].sort((left, right) => {
+    const leftScore = (left.health.critical * 100) + (left.health.high * 10) + left.health.down;
+    const rightScore = (right.health.critical * 100) + (right.health.high * 10) + right.health.down;
+    return rightScore - leftScore;
+  });
+
+  const actionItems = rankedDomains
+    .map((item) => ({
+      domain: item.domain.name,
+      accent: item.domain.accent,
+      label: item.topDecision?.label ?? item.topAlert?.label ?? 'Поддерживать текущий режим',
+      tone: item.topDecision?.tone ?? item.topAlert?.tone ?? 'low',
+      summary: item.liveData.summary ?? item.domain.meta.executiveSummary,
+      state: item.health.state,
+    }))
+    .slice(0, 4);
+
+  return { rankedDomains, actionItems };
+}
+
+function renderGlobalBrief() {
+  const executiveAgenda = buildExecutiveAgenda();
+  const criticalDomains = executiveAgenda.rankedDomains.filter((item) => item.health.state === 'critical').length;
+  const attentionDomains = executiveAgenda.rankedDomains.filter((item) => item.health.state === 'attention').length;
+  const totalCritical = executiveAgenda.rankedDomains.reduce((sum, item) => sum + item.health.critical, 0);
+  const totalHigh = executiveAgenda.rankedDomains.reduce((sum, item) => sum + item.health.high, 0);
+
+  els.globalBrief.innerHTML = `
+    <div class="global-brief-grid">
+      <section class="global-brief-card global-brief-card-wide">
+        <div>
+          <p class="panel-kicker">System Brief</p>
+          <h2>Короткая управленческая сводка по всей системе</h2>
+        </div>
+        <p class="hero-text">
+          На странице уже собраны 4 управленческих контура, общий executive agenda и отдельные доменные экраны.
+          Ниже можно быстро перейти к ключевым секциям или сразу провалиться в самый проблемный домен.
+        </p>
+        <div class="global-brief-actions">
+          <button class="domain-screen-action" type="button" data-brief-jump="architecture">К архитектуре</button>
+          <button class="domain-screen-action" type="button" data-brief-jump="showcase">К доменным экранам</button>
+          <button class="domain-screen-action" type="button" data-brief-domain="${executiveAgenda.rankedDomains[0]?.domain.name ?? 'Финансы'}">Открыть главный риск</button>
+        </div>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Critical Domains</span>
+        <strong>${criticalDomains}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Attention Domains</span>
+        <strong>${attentionDomains}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Critical KPI Count</span>
+        <strong>${totalCritical}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">High KPI Count</span>
+        <strong>${totalHigh}</strong>
+      </section>
+    </div>
+    <div class="global-brief-nav">
+      <button class="global-brief-link" type="button" data-brief-panel="panel-queue">Queue</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-rop">Escalations</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-owner">Owner Dashboard</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-logistics">Production / Logistics</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-quality">Data Quality</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-system">System Status</button>
+    </div>
+  `;
+
+  document.querySelectorAll('[data-brief-panel]').forEach((node) => {
+    node.addEventListener('click', () => {
+      document.getElementById(node.dataset.briefPanel)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-brief-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      if (node.dataset.briefJump === 'architecture') {
+        document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (node.dataset.briefJump === 'showcase') {
+        document.querySelector('.panel-domain-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-brief-domain]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.briefDomain;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function renderDomainShowcase() {
+  els.domainShowcaseIntro.innerHTML = `
+    <article class="architecture-story">
+      <div>
+        <p class="panel-kicker">Domain Narrative</p>
+        <h3>Каждый контур развернут как отдельный управленческий экран</h3>
+      </div>
+      <p class="hero-text">
+        Ниже домены показаны уже не как краткие карточки, а как полноценные смысловые экраны:
+        с executive-narrative, живыми KPI, состояниями S3, решениями S2, сенсорами S4 и точками входа
+        в operational-панели текущего интерфейса.
+      </p>
+    </article>
+  `;
+
+  els.domainShowcaseNav.innerHTML = `
+    <div class="domain-showcase-nav-bar">
+      ${getDomains().map((domain) => `
+        <button class="domain-showcase-chip ${uiState.activeDomain === domain.name ? 'domain-showcase-chip-active' : ''}" type="button" data-showcase-jump="${domain.name}">
+          <span class="domain-showcase-chip-title">${domain.name}</span>
+          <span class="domain-showcase-chip-sub">${domain.meta.audience}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  els.domainShowcase.innerHTML = getDomains().map((domain) => {
+    const summary = summarizeDomainLive(domain);
+    const { meta, architecture } = domain;
+    const liveStates = summary.liveData.states ?? [];
+    const liveDecisions = summary.liveData.decisions ?? [];
+    const liveSensors = summary.liveData.sensors ?? [];
+    const liveSummary = summary.liveData.summary ?? meta.executiveSummary;
+
+    return `
+      <article class="domain-screen domain-screen-${domain.accent}" id="domain-screen-${domain.name}">
+        <div class="domain-screen-hero">
+          <div>
+            <p class="panel-kicker">Domain Screen</p>
+            <h3>${domain.name}</h3>
+            <p class="domain-role">${meta.storyline}</p>
+          </div>
+          <div class="domain-screen-meta">
+            <div class="domain-screen-stat">
+              <span class="domain-label">State</span>
+              <strong>${getDomainStateLabel(summary.health.state)}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">Audience</span>
+              <strong>${meta.audience}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">Critical</span>
+              <strong>${summary.health.critical}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">High</span>
+              <strong>${summary.health.high}</strong>
+            </div>
+          </div>
+        </div>
+        <div class="domain-screen-actions">
+          <button class="domain-screen-action" type="button" data-focus-domain="${domain.name}">Открыть focus-блок</button>
+          <button class="domain-screen-action" type="button" data-scroll-top="architecture">К архитектуре</button>
+        </div>
+
+        <div class="domain-screen-grid">
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Executive Narrative</span>
+            <p>${liveSummary}</p>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Что делает контур</span>
+            <p>${meta.role}</p>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Top Decision</span>
+            <p>${summary.topDecision?.label ?? 'Система не видит решения, требующего немедленной эскалации.'}</p>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Core KPI Layer</span>
+            <div class="focus-kpi-grid">
+              ${summary.effectiveKpis.map((item) => `
+                <article class="focus-kpi-card focus-kpi-card-${item.tone}">
+                  <span class="stat-label">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <div class="focus-kpi-meta">
+                    <span class="badge badge-${item.tone}">${item.tone}</span>
+                    ${item.target ? `<span class="focus-kpi-sub">Target: ${item.target}</span>` : ''}
+                  </div>
+                  <div class="focus-kpi-trend-row">
+                    <span class="focus-kpi-trend focus-kpi-trend-${item.trend ?? 'flat'}">${getTrendSymbol(item.trend)} ${item.trend ?? 'flat'}</span>
+                    ${item.delta ? `<span class="focus-kpi-sub">Delta: ${item.delta}</span>` : ''}
+                  </div>
+                </article>
+              `).join('')}
+            </div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Live States S3</span>
+            ${renderSignalCards(liveStates, 'Состояния пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Recommended Decisions S2</span>
+            ${renderSignalCards(liveDecisions, 'Решения пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Evidence Signals S4</span>
+            ${renderSignalCards(liveSensors, 'Сенсоры пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Management Risks</span>
+            <div class="badge-row">${renderListBadges(architecture.risks, 'critical')}</div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Key Outcomes</span>
+            <div class="badge-row">${renderListBadges(architecture.outcomes, 'low')}</div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Indices</span>
+            <div class="badge-row">${renderListBadges(architecture.indices, 'medium')}</div>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Operational Entry Points</span>
+            <div class="focus-link-list">
+              ${renderPanelLinks(domain.panels ?? [])}
+            </div>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Domain Blueprint</span>
+            <div class="domain-blueprint-grid">
+              <div>
+                <span class="domain-label">Processes</span>
+                <div class="badge-row">${renderListBadges(architecture.processes, 'low')}</div>
+              </div>
+              <div>
+                <span class="domain-label">States</span>
+                <div class="badge-row">${renderListBadges(architecture.states, 'high')}</div>
+              </div>
+              <div>
+                <span class="domain-label">Decisions</span>
+                <div class="badge-row">${renderListBadges(architecture.decisions, 'critical')}</div>
+              </div>
+              <div>
+                <span class="domain-label">Sensors</span>
+                <div class="badge-row">${renderListBadges(architecture.sensors, 'medium')}</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  document.querySelectorAll('[data-showcase-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.showcaseJump;
+      const target = document.getElementById(`domain-screen-${domainName}`);
+      if (!target) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('.panel-domain-showcase [data-panel-target]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const target = document.getElementById(node.dataset.panelTarget);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-focus-domain]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.focusDomain;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      const target = document.querySelector('.panel-architecture');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-scroll-top="architecture"]').forEach((node) => {
+    node.addEventListener('click', () => {
+      document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
 }
 
 function renderDomainFocus(domain) {
@@ -113,7 +514,11 @@ function renderDomainFocus(domain) {
   const liveData = uiState.domainLiveData[domain.name] ?? {};
   const effectiveKpis = liveData.kpis ?? dashboard.kpis;
   const liveSummary = liveData.summary ?? meta.executiveSummary;
+  const liveStates = liveData.states ?? [];
+  const liveDecisions = liveData.decisions ?? [];
+  const liveSensors = liveData.sensors ?? [];
   const health = buildDomainHealthSnapshot(effectiveKpis);
+  const overview = buildKpiOverview(effectiveKpis);
   const highlightedKpis = effectiveKpis.filter((item) => item.tone === 'critical' || item.tone === 'high');
   const liveStamp = uiState.domainLiveGeneratedAt ? formatDateTime(uiState.domainLiveGeneratedAt) : '—';
 
@@ -146,7 +551,7 @@ function renderDomainFocus(domain) {
           <div class="focus-health-row">
             <article class="focus-health-card">
               <span class="stat-label">Domain State</span>
-              <strong>${health.state}</strong>
+              <strong>${getDomainStateLabel(health.state)}</strong>
             </article>
             <article class="focus-health-card">
               <span class="stat-label">Critical KPIs</span>
@@ -160,16 +565,72 @@ function renderDomainFocus(domain) {
               <span class="stat-label">Updated</span>
               <strong>${liveStamp}</strong>
             </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Down Trends</span>
+              <strong>${health.down}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Improving KPIs</span>
+              <strong>${health.improved}</strong>
+            </article>
           </div>
+          <p class="focus-health-note">${getStateNarrative(domain.name, health)}</p>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Priority Drivers</span>
+          <div class="focus-overview-list">
+            ${overview.hot.length
+              ? overview.hot.map((item) => `
+                <article class="focus-overview-card">
+                  <span class="badge badge-${item.tone}">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <p>${item.target ? `Target ${item.target}` : 'Цель не задана'}${item.delta ? ` · delta ${item.delta}` : ''}</p>
+                </article>
+              `).join('')
+              : '<div class="empty">Сильных отклонений по домену сейчас нет.</div>'}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Positive Signals</span>
+          <div class="focus-overview-list">
+            ${overview.improving.length
+              ? overview.improving.map((item) => `
+                <article class="focus-overview-card">
+                  <span class="badge badge-low">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <p>${item.target ? `Target ${item.target}` : 'Сигнал без target'}${item.delta ? ` · delta ${item.delta}` : ''}</p>
+                </article>
+              `).join('')
+              : '<div class="empty">Явных позитивных сигналов пока мало, домену нужен дальнейший разгон.</div>'}
+          </div>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Live States S3</span>
+          ${renderSignalCards(liveStates, 'Состояния домена пока не загружены.')}
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Recommended Decisions S2</span>
+          ${renderSignalCards(liveDecisions, 'Решения по домену пока не рассчитаны.')}
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Evidence Signals S4</span>
+          ${renderSignalCards(liveSensors, 'Сенсоры домена пока не загружены.')}
         </section>
         <section class="focus-section focus-section-wide">
           <span class="domain-label">Мини-дашборд домена</span>
           <div class="focus-kpi-grid">
             ${effectiveKpis.map((item) => `
-              <article class="focus-kpi-card">
+              <article class="focus-kpi-card focus-kpi-card-${item.tone}">
                 <span class="stat-label">${item.label}</span>
                 <strong>${item.value}</strong>
-                <span class="badge badge-${item.tone}">${domain.name}</span>
+                <div class="focus-kpi-meta">
+                  <span class="badge badge-${item.tone}">${item.tone}</span>
+                  ${item.target ? `<span class="focus-kpi-sub">Target: ${item.target}</span>` : ''}
+                </div>
+                <div class="focus-kpi-trend-row">
+                  <span class="focus-kpi-trend focus-kpi-trend-${item.trend ?? 'flat'}">${getTrendSymbol(item.trend)} ${item.trend ?? 'flat'}</span>
+                  ${item.delta ? `<span class="focus-kpi-sub">Delta: ${item.delta}</span>` : ''}
+                </div>
               </article>
             `).join('')}
           </div>
@@ -178,7 +639,7 @@ function renderDomainFocus(domain) {
           <span class="domain-label">Priority Alerts</span>
           <div class="badge-row">
             ${highlightedKpis.length
-              ? highlightedKpis.map((item) => `<span class="badge badge-${item.tone}">${item.label}: ${item.value}</span>`).join('')
+              ? highlightedKpis.map((item) => `<span class="badge badge-${item.tone}">${item.label}: ${item.value}${item.delta ? ` · ${item.delta}` : ''}${item.target ? ` · target ${item.target}` : ''}</span>`).join('')
               : '<span class="badge badge-low">Критичных сигналов по домену сейчас нет</span>'}
           </div>
         </section>
@@ -240,6 +701,8 @@ function applyDomainPanelHighlight(domain) {
 }
 
 function renderArchitectureOverview() {
+  const executiveAgenda = buildExecutiveAgenda();
+
   els.architectureIntro.innerHTML = `
     <article class="architecture-story">
       <div>
@@ -269,9 +732,60 @@ function renderArchitectureOverview() {
     </div>
   `;
 
+  els.architectureExecutive.innerHTML = `
+    <div class="architecture-executive-grid">
+      <section class="architecture-executive-card architecture-executive-card-wide">
+        <div class="architecture-executive-head">
+          <div>
+            <p class="panel-kicker">Executive Agenda</p>
+            <h3>Что руководителю важно разобрать в первую очередь</h3>
+          </div>
+          <span class="badge badge-high">${executiveAgenda.actionItems.length} actions</span>
+        </div>
+        <div class="architecture-agenda-list">
+          ${executiveAgenda.actionItems.map((item, index) => `
+            <article class="architecture-agenda-item">
+              <span class="architecture-agenda-rank">0${index + 1}</span>
+              <div>
+                <div class="architecture-agenda-top">
+                  <strong>${item.domain}</strong>
+                  <span class="badge badge-${item.tone}">${getDomainStateLabel(item.state)}</span>
+                </div>
+                <p>${item.label}</p>
+                <span class="architecture-agenda-summary">${item.summary}</span>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      </section>
+      <section class="architecture-executive-card">
+        <p class="panel-kicker">Portfolio Heatmap</p>
+        <h3>Сравнение контуров</h3>
+        <div class="architecture-heatmap-list">
+          ${executiveAgenda.rankedDomains.map((item) => `
+            <button class="architecture-heatmap-item" type="button" data-domain-jump="${item.domain.name}">
+              <div>
+                <strong>${item.domain.name}</strong>
+                <span>${getDomainStateLabel(item.health.state)}</span>
+              </div>
+              <div class="architecture-heatmap-metrics">
+                <span>C ${item.health.critical}</span>
+                <span>H ${item.health.high}</span>
+                <span>D ${item.health.down}</span>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+  `;
+
   els.domainSelector.innerHTML = `
     <div class="domain-selector-bar">
       ${getDomains().map((domain) => `
+        ${(() => {
+          const summary = summarizeDomainLive(domain);
+          return `
         <button
           class="domain-toggle ${uiState.activeDomain === domain.name ? 'domain-toggle-active' : ''}"
           data-domain-name="${domain.name}"
@@ -279,12 +793,20 @@ function renderArchitectureOverview() {
         >
           <span class="domain-toggle-title">${domain.name}</span>
           <span class="domain-toggle-subtitle">${domain.architecture.processes[0]} · ${domain.architecture.states[0]}</span>
+          <span class="domain-toggle-meta">
+            <span class="badge badge-${summary.health.state === 'critical' ? 'critical' : summary.health.state === 'attention' ? 'high' : summary.health.state === 'watch' ? 'medium' : 'low'}">${getDomainStateLabel(summary.health.state)}</span>
+            <span class="domain-toggle-micro">${summary.health.critical} critical · ${summary.health.high} high</span>
+          </span>
         </button>
+        `;
+        })()}
       `).join('')}
     </div>
   `;
 
-  els.domainCards.innerHTML = getDomains().map((domain) => `
+  els.domainCards.innerHTML = getDomains().map((domain) => {
+    const summary = summarizeDomainLive(domain);
+    return `
     <article class="domain-card domain-card-${domain.accent} ${uiState.activeDomain === domain.name ? 'domain-card-active' : ''}" data-domain-card="${domain.name}">
       <div class="domain-card-head">
         <div>
@@ -294,6 +816,24 @@ function renderArchitectureOverview() {
         <span class="badge badge-${getDomainTone(domain.accent)}">${domain.name}</span>
       </div>
       <p class="domain-role">${domain.meta.role}</p>
+      <div class="domain-live-strip">
+        <span class="badge badge-${summary.health.state === 'critical' ? 'critical' : summary.health.state === 'attention' ? 'high' : summary.health.state === 'watch' ? 'medium' : 'low'}">${getDomainStateLabel(summary.health.state)}</span>
+        <span class="domain-live-item">Critical: <strong>${summary.health.critical}</strong></span>
+        <span class="domain-live-item">Down: <strong>${summary.health.down}</strong></span>
+        <span class="domain-live-item">Improving: <strong>${summary.health.improved}</strong></span>
+      </div>
+      <div class="domain-live-summary">
+        <div class="domain-live-box">
+          <span class="domain-label">Top alert</span>
+          <strong>${summary.topAlert ? `${summary.topAlert.label}: ${summary.topAlert.value}` : 'Сильных отклонений нет'}</strong>
+          <p>${summary.topAlert?.target ? `Target ${summary.topAlert.target}` : 'Контур без явного критичного отклонения'}</p>
+        </div>
+        <div class="domain-live-box">
+          <span class="domain-label">Top decision</span>
+          <strong>${summary.topDecision?.label ?? 'Решение не требуется'}</strong>
+          <p>${summary.liveData.summary ?? domain.meta.executiveSummary}</p>
+        </div>
+      </div>
       <div class="domain-stack">
         <div class="domain-block">
           <span class="domain-label">Процессы</span>
@@ -317,7 +857,8 @@ function renderArchitectureOverview() {
         </div>
       </div>
     </article>
-  `).join('');
+  `;
+  }).join('');
 
   const activeDomain = getDomainByName(uiState.activeDomain);
   renderDomainFocus(activeDomain);
@@ -327,6 +868,15 @@ function renderArchitectureOverview() {
     node.addEventListener('click', () => {
       const domainName = node.dataset.domainName ?? node.dataset.domainCard;
       if (!domainName || uiState.activeDomain === domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+    });
+  });
+
+  document.querySelectorAll('[data-domain-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.domainJump;
+      if (!domainName) return;
       uiState.activeDomain = domainName;
       renderArchitectureOverview();
     });
@@ -1857,7 +2407,9 @@ async function loadDomainSummary() {
 
 async function refreshAll() {
   try {
+    renderGlobalBrief();
     renderArchitectureOverview();
+    renderDomainShowcase();
     await loadAuthMe();
     const [queueItems, ropItems, monitor] = await Promise.all([loadQueue(), loadRopEscalations(), loadIngestMonitor()]);
     const [
@@ -1881,7 +2433,9 @@ async function refreshAll() {
       loadDictionaries(),
       loadDomainSummary(),
     ]);
+    renderGlobalBrief();
     renderArchitectureOverview();
+    renderDomainShowcase();
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {
       els.cardIdInput.value = queueItems[0].opportunity_id;

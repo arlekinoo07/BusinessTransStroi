@@ -2100,6 +2100,51 @@ export async function buildFeedbackLearningDashboard() {
   return repository.getFeedbackLearningSummary(12);
 }
 
+function buildKpi({ label, value, tone, target = null, delta = null, trend = 'flat' }) {
+  return { label, value, tone, target, delta, trend };
+}
+
+function buildDomainSignal(label, tone = 'low', value = null) {
+  return { label, tone, value };
+}
+
+function formatSignedNumber(value, suffix = '') {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value * 10) / 10;
+  const prefix = rounded > 0 ? '+' : '';
+  return `${prefix}${rounded}${suffix}`;
+}
+
+function buildRatioKpi({
+  label,
+  numerator,
+  denominator,
+  threshold,
+  tone = 'medium',
+  targetLabel,
+}) {
+  if (!denominator) {
+    return buildKpi({
+      label,
+      value: `0/0`,
+      tone,
+      target: targetLabel,
+      delta: null,
+      trend: 'flat',
+    });
+  }
+
+  const percent = Math.round((numerator / denominator) * 100);
+  return buildKpi({
+    label,
+    value: `${numerator}/${denominator} (${percent}%)`,
+    tone,
+    target: targetLabel,
+    delta: formatSignedNumber(percent - threshold, ' pp'),
+    trend: percent >= threshold ? 'up' : 'down',
+  });
+}
+
 function buildFinanceDomainSummary({ queueItems, ropItems, ownerSummary, systemIngest, opportunities }) {
   const financeItems = queueItems.filter((item) => item.state_codes?.includes('debt_risk'));
   const marginRiskDeals = opportunities.filter((item) => {
@@ -2114,14 +2159,29 @@ function buildFinanceDomainSummary({ queueItems, ropItems, ownerSummary, systemI
   return {
     summary: `Сейчас в финансовом контуре ${financeItems.length} сделок с риском по оплате или ограничениям, ${marginRiskDeals} сделок с давлением на маржу и ${ropItems.length} управленческих эскалаций.`,
     kpis: [
-      { label: 'Debt Risk Deals', value: String(financeItems.length), tone: financeItems.length > 0 ? 'high' : 'low' },
-      { label: 'Avg Margin', value: ownerSummary.average_margin_percent !== null && ownerSummary.average_margin_percent !== undefined ? `${ownerSummary.average_margin_percent}%` : '—', tone: 'medium' },
-      { label: 'Debt Exposure', value: Number.isFinite(ownerSummary.debt_exposure_share) ? `${ownerSummary.debt_exposure_share}%` : '—', tone: 'high' },
-      { label: 'Ingest Freshness', value: systemIngest.freshness_state ?? '—', tone: systemIngest.freshness_state === 'stale' ? 'critical' : 'low' },
-      { label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low' },
-      { label: 'Credit Blocks', value: String(blockedCredits), tone: blockedCredits > 0 ? 'critical' : 'low' },
-      { label: 'Overdue Debt', value: String(overdueDebtDeals), tone: overdueDebtDeals > 0 ? 'high' : 'low' },
-      { label: 'Payment Ready', value: `${readyForMoneyFlow}/${opportunities.length || 0}`, tone: 'medium' },
+      buildKpi({ label: 'Debt Risk Deals', value: String(financeItems.length), tone: financeItems.length > 0 ? 'high' : 'low', target: '0', delta: financeItems.length > 0 ? `+${financeItems.length}` : '0', trend: financeItems.length > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Avg Margin', value: ownerSummary.average_margin_percent !== null && ownerSummary.average_margin_percent !== undefined ? `${ownerSummary.average_margin_percent}%` : '—', tone: 'medium', target: '22%+', delta: ownerSummary.average_margin_percent !== null && ownerSummary.average_margin_percent !== undefined ? formatSignedNumber(ownerSummary.average_margin_percent - 22, ' pp') : null, trend: (ownerSummary.average_margin_percent ?? 0) >= 22 ? 'up' : 'down' }),
+      buildKpi({ label: 'Debt Exposure', value: Number.isFinite(ownerSummary.debt_exposure_share) ? `${ownerSummary.debt_exposure_share}%` : '—', tone: 'high', target: '<15%', delta: Number.isFinite(ownerSummary.debt_exposure_share) ? formatSignedNumber(ownerSummary.debt_exposure_share - 15, ' pp') : null, trend: (ownerSummary.debt_exposure_share ?? 0) > 15 ? 'up' : 'down' }),
+      buildKpi({ label: 'Ingest Freshness', value: systemIngest.freshness_state ?? '—', tone: systemIngest.freshness_state === 'stale' ? 'critical' : 'low', target: 'active', delta: null, trend: systemIngest.freshness_state === 'stale' ? 'down' : 'flat' }),
+      buildKpi({ label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low', target: '0', delta: marginRiskDeals > 0 ? `+${marginRiskDeals}` : '0', trend: marginRiskDeals > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Credit Blocks', value: String(blockedCredits), tone: blockedCredits > 0 ? 'critical' : 'low', target: '0', delta: blockedCredits > 0 ? `+${blockedCredits}` : '0', trend: blockedCredits > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Overdue Debt', value: String(overdueDebtDeals), tone: overdueDebtDeals > 0 ? 'high' : 'low', target: '0', delta: overdueDebtDeals > 0 ? `+${overdueDebtDeals}` : '0', trend: overdueDebtDeals > 0 ? 'up' : 'flat' }),
+      buildRatioKpi({ label: 'Payment Ready', numerator: readyForMoneyFlow, denominator: opportunities.length || 0, threshold: 70, tone: 'medium', targetLabel: '70%+' }),
+    ],
+    states: [
+      buildDomainSignal(blockedCredits > 0 ? 'Кредитные ограничения активны' : 'Кредитные ограничения не активны', blockedCredits > 0 ? 'critical' : 'low', `${blockedCredits}`),
+      buildDomainSignal(overdueDebtDeals > 0 ? 'Есть сделки с просрочкой дебиторки' : 'Просроченная дебиторка не доминирует', overdueDebtDeals > 0 ? 'high' : 'low', `${overdueDebtDeals}`),
+      buildDomainSignal(marginRiskDeals > 0 ? 'Маржа по части сделок ниже порога' : 'Маржинальный порог в норме', marginRiskDeals > 0 ? 'high' : 'low', `${marginRiskDeals}`),
+    ],
+    decisions: [
+      buildDomainSignal(blockedCredits > 0 ? 'Эскалировать блокировки в CFO/CEO и пересмотреть условия оплаты' : 'Поддерживать текущий кредитный режим', blockedCredits > 0 ? 'critical' : 'low'),
+      buildDomainSignal(overdueDebtDeals > 0 ? 'Запустить ускорение дебиторки и обзвон должников' : 'Сохранять стандартный контроль дебиторки', overdueDebtDeals > 0 ? 'high' : 'low'),
+      buildDomainSignal(readyForMoneyFlow < Math.ceil((opportunities.length || 0) * 0.7) ? 'Усилить перевод сделок в payment-ready' : 'Фокус держать на сохранении платежной готовности', readyForMoneyFlow < Math.ceil((opportunities.length || 0) * 0.7) ? 'medium' : 'low'),
+    ],
+    sensors: [
+      buildDomainSignal('Debt risk queue', financeItems.length > 0 ? 'high' : 'low', `${financeItems.length}`),
+      buildDomainSignal('Owner margin summary', 'medium', ownerSummary.average_margin_percent !== null && ownerSummary.average_margin_percent !== undefined ? `${ownerSummary.average_margin_percent}%` : '—'),
+      buildDomainSignal('System ingest freshness', systemIngest.freshness_state === 'stale' ? 'critical' : 'low', systemIngest.freshness_state ?? '—'),
     ],
   };
 }
@@ -2138,14 +2198,29 @@ function buildMarketingDomainSummary({ qualitySummary, normalizationSummary, fee
   return {
     summary: `Маркетинговый контур сейчас опирается на полноту клиентского интента (${clientIntentPercent}%), ценовой контекст (${priceContextPercent}%) и покрытие обучением (${learningCoveragePercent}%). Также в системе ${duplicateCandidates} неразобранных дублей, которые искажают оценку спроса.`,
     kpis: [
-      { label: 'Client Intent', value: Number.isFinite(clientIntentPercent) ? `${clientIntentPercent}%` : '—', tone: clientIntentPercent < 60 ? 'high' : 'medium' },
-      { label: 'Price Context', value: Number.isFinite(priceContextPercent) ? `${priceContextPercent}%` : '—', tone: priceContextPercent < 60 ? 'high' : 'low' },
-      { label: 'Linked Events', value: Number.isFinite(linkedEventsPercent) ? `${linkedEventsPercent}%` : '—', tone: linkedEventsPercent < 75 ? 'high' : 'low' },
-      { label: 'Competitor Signal', value: Number.isFinite(competitorConfidencePercent) ? `${competitorConfidencePercent}%` : '—', tone: 'medium' },
-      { label: 'Learning Coverage', value: `${learningCoveragePercent}%`, tone: learningCoveragePercent < 50 ? 'high' : 'medium' },
-      { label: 'Promote Action', value: String(promoteAction), tone: 'low' },
-      { label: 'Duplicate Candidates', value: String(duplicateCandidates), tone: duplicateCandidates > 0 ? 'high' : 'low' },
-      { label: 'Normalization Scope', value: String(normalizationSummary.companies_seen ?? 0), tone: 'low' },
+      buildKpi({ label: 'Client Intent', value: Number.isFinite(clientIntentPercent) ? `${clientIntentPercent}%` : '—', tone: clientIntentPercent < 60 ? 'high' : 'medium', target: '70%+', delta: formatSignedNumber(clientIntentPercent - 70, ' pp'), trend: clientIntentPercent >= 70 ? 'up' : 'down' }),
+      buildKpi({ label: 'Price Context', value: Number.isFinite(priceContextPercent) ? `${priceContextPercent}%` : '—', tone: priceContextPercent < 60 ? 'high' : 'low', target: '70%+', delta: formatSignedNumber(priceContextPercent - 70, ' pp'), trend: priceContextPercent >= 70 ? 'up' : 'down' }),
+      buildKpi({ label: 'Linked Events', value: Number.isFinite(linkedEventsPercent) ? `${linkedEventsPercent}%` : '—', tone: linkedEventsPercent < 75 ? 'high' : 'low', target: '85%+', delta: formatSignedNumber(linkedEventsPercent - 85, ' pp'), trend: linkedEventsPercent >= 85 ? 'up' : 'down' }),
+      buildKpi({ label: 'Competitor Signal', value: Number.isFinite(competitorConfidencePercent) ? `${competitorConfidencePercent}%` : '—', tone: 'medium', target: '60%+', delta: formatSignedNumber(competitorConfidencePercent - 60, ' pp'), trend: competitorConfidencePercent >= 60 ? 'up' : 'down' }),
+      buildKpi({ label: 'Learning Coverage', value: `${learningCoveragePercent}%`, tone: learningCoveragePercent < 50 ? 'high' : 'medium', target: '65%+', delta: formatSignedNumber(learningCoveragePercent - 65, ' pp'), trend: learningCoveragePercent >= 65 ? 'up' : 'down' }),
+      buildKpi({ label: 'Promote Action', value: String(promoteAction), tone: 'low', target: 'defined', delta: null, trend: promoteAction !== '—' ? 'up' : 'flat' }),
+      buildKpi({ label: 'Duplicate Candidates', value: String(duplicateCandidates), tone: duplicateCandidates > 0 ? 'high' : 'low', target: '0', delta: duplicateCandidates > 0 ? `+${duplicateCandidates}` : '0', trend: duplicateCandidates > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Normalization Scope', value: String(normalizationSummary.companies_seen ?? 0), tone: 'low', target: 'growing', delta: null, trend: 'up' }),
+    ],
+    states: [
+      buildDomainSignal(clientIntentPercent < 70 ? 'Клиентский интент заполнен не полностью' : 'Клиентский интент покрыт на рабочем уровне', clientIntentPercent < 70 ? 'high' : 'low', `${clientIntentPercent}%`),
+      buildDomainSignal(priceContextPercent < 70 ? 'Ценовой контекст неполный' : 'Ценовой контекст достаточный', priceContextPercent < 70 ? 'high' : 'low', `${priceContextPercent}%`),
+      buildDomainSignal(duplicateCandidates > 0 ? 'Нормализация и дубли искажают картину спроса' : 'Слой нормализации стабилен', duplicateCandidates > 0 ? 'high' : 'low', `${duplicateCandidates}`),
+    ],
+    decisions: [
+      buildDomainSignal(clientIntentPercent < 70 ? 'Усилить дисциплину заполнения ICP и потребности клиента' : 'Поддерживать текущий стандарт capture контекста', clientIntentPercent < 70 ? 'high' : 'low'),
+      buildDomainSignal(priceContextPercent < 70 ? 'Добавить price context в лиды и офферы' : 'Продолжать использовать ценовой контекст как фильтр качества спроса', priceContextPercent < 70 ? 'high' : 'low'),
+      buildDomainSignal(duplicateCandidates > 0 ? 'Приоритизировать разбор дублей и нормализацию справочников' : 'Держать нормализацию в режиме контроля', duplicateCandidates > 0 ? 'medium' : 'low'),
+    ],
+    sensors: [
+      buildDomainSignal('Client intent completeness', clientIntentPercent < 70 ? 'high' : 'low', `${clientIntentPercent}%`),
+      buildDomainSignal('Linked events coverage', linkedEventsPercent < 85 ? 'medium' : 'low', `${linkedEventsPercent}%`),
+      buildDomainSignal('Learning coverage', learningCoveragePercent < 65 ? 'medium' : 'low', `${learningCoveragePercent}%`),
     ],
   };
 }
@@ -2167,16 +2242,31 @@ function buildSalesDomainSummary({ queueItems, ropItems, feedbackSummary, qualit
   return {
     summary: `В продажах сейчас ${salesItems.length} горячих сделок в очереди, из них ${hotUnworkedDeals} уже с риском SLA, ${marginRiskDeals} сделок под давлением по марже и ${ropItems.length} эскалаций.`,
     kpis: [
-      { label: 'Hot Deals', value: String(salesItems.length), tone: salesItems.length > 0 ? 'high' : 'low' },
-      { label: 'Hot Urgent', value: String(hotUrgentDeals), tone: hotUrgentDeals > 0 ? 'high' : 'low' },
-      { label: 'SLA Risk', value: String(hotUnworkedDeals), tone: hotUnworkedDeals > 0 ? 'critical' : 'low' },
-      { label: 'Escalations', value: String(ropItems.length), tone: ropItems.length > 0 ? 'high' : 'low' },
-      { label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low' },
-      { label: 'Payment Ready', value: `${paymentReadyDeals}/${opportunities.length || 0}`, tone: 'medium' },
-      { label: 'Contract Stage', value: String(contractStageDeals), tone: contractStageDeals > 0 ? 'medium' : 'low' },
-      { label: 'Next Step Signal', value: Number.isFinite(qualitySummary.next_step_signal_percent) ? `${qualitySummary.next_step_signal_percent}%` : '—', tone: 'medium' },
-      { label: 'Accepted Rate', value: `${Math.round((feedbackSummary.accepted_rate ?? 0) * 100)}%`, tone: 'medium' },
-      { label: 'Executed Rate', value: `${Math.round((feedbackSummary.executed_rate ?? 0) * 100)}%`, tone: 'medium' },
+      buildKpi({ label: 'Hot Deals', value: String(salesItems.length), tone: salesItems.length > 0 ? 'high' : 'low', target: '<5', delta: salesItems.length > 5 ? `+${salesItems.length - 5}` : '0', trend: salesItems.length > 5 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Hot Urgent', value: String(hotUrgentDeals), tone: hotUrgentDeals > 0 ? 'high' : 'low', target: 'handled', delta: hotUrgentDeals > 0 ? `+${hotUrgentDeals}` : '0', trend: hotUrgentDeals > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'SLA Risk', value: String(hotUnworkedDeals), tone: hotUnworkedDeals > 0 ? 'critical' : 'low', target: '0', delta: hotUnworkedDeals > 0 ? `+${hotUnworkedDeals}` : '0', trend: hotUnworkedDeals > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Escalations', value: String(ropItems.length), tone: ropItems.length > 0 ? 'high' : 'low', target: '<3', delta: ropItems.length > 3 ? `+${ropItems.length - 3}` : '0', trend: ropItems.length > 3 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Margin Risk Deals', value: String(marginRiskDeals), tone: marginRiskDeals > 0 ? 'high' : 'low', target: '0', delta: marginRiskDeals > 0 ? `+${marginRiskDeals}` : '0', trend: marginRiskDeals > 0 ? 'up' : 'flat' }),
+      buildRatioKpi({ label: 'Payment Ready', numerator: paymentReadyDeals, denominator: opportunities.length || 0, threshold: 60, tone: 'medium', targetLabel: '60%+' }),
+      buildKpi({ label: 'Contract Stage', value: String(contractStageDeals), tone: contractStageDeals > 0 ? 'medium' : 'low', target: 'growth', delta: null, trend: contractStageDeals > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Next Step Signal', value: Number.isFinite(qualitySummary.next_step_signal_percent) ? `${qualitySummary.next_step_signal_percent}%` : '—', tone: 'medium', target: '80%+', delta: Number.isFinite(qualitySummary.next_step_signal_percent) ? formatSignedNumber(qualitySummary.next_step_signal_percent - 80, ' pp') : null, trend: (qualitySummary.next_step_signal_percent ?? 0) >= 80 ? 'up' : 'down' }),
+      buildKpi({ label: 'Accepted Rate', value: `${Math.round((feedbackSummary.accepted_rate ?? 0) * 100)}%`, tone: 'medium', target: '70%+', delta: formatSignedNumber(Math.round((feedbackSummary.accepted_rate ?? 0) * 100) - 70, ' pp'), trend: (feedbackSummary.accepted_rate ?? 0) >= 0.7 ? 'up' : 'down' }),
+      buildKpi({ label: 'Executed Rate', value: `${Math.round((feedbackSummary.executed_rate ?? 0) * 100)}%`, tone: 'medium', target: '55%+', delta: formatSignedNumber(Math.round((feedbackSummary.executed_rate ?? 0) * 100) - 55, ' pp'), trend: (feedbackSummary.executed_rate ?? 0) >= 0.55 ? 'up' : 'down' }),
+    ],
+    states: [
+      buildDomainSignal(hotUnworkedDeals > 0 ? 'Есть горячие сделки с риском SLA' : 'SLA по горячим сделкам контролируется', hotUnworkedDeals > 0 ? 'critical' : 'low', `${hotUnworkedDeals}`),
+      buildDomainSignal(marginRiskDeals > 0 ? 'Часть воронки идет в продажи с просадкой по марже' : 'Маржинальные риски в воронке не доминируют', marginRiskDeals > 0 ? 'high' : 'low', `${marginRiskDeals}`),
+      buildDomainSignal(paymentReadyDeals < Math.ceil((opportunities.length || 0) * 0.6) ? 'Недостаточно сделок доведено до оплаты' : 'Конверсия в оплату на рабочем уровне', paymentReadyDeals < Math.ceil((opportunities.length || 0) * 0.6) ? 'high' : 'low', `${paymentReadyDeals}/${opportunities.length || 0}`),
+    ],
+    decisions: [
+      buildDomainSignal(hotUnworkedDeals > 0 ? 'Разобрать SLA-риск по горячим сделкам и перераспределить владельцев' : 'Сохранять текущий режим управления горячими сделками', hotUnworkedDeals > 0 ? 'critical' : 'low'),
+      buildDomainSignal(marginRiskDeals > 0 ? 'Ограничить скидки и вынести margin-risk сделки на разбор' : 'Удерживать текущую маржинальную дисциплину', marginRiskDeals > 0 ? 'high' : 'low'),
+      buildDomainSignal(contractStageDeals > 0 ? 'Ускорить contract/invoice stage до оплаты' : 'Фокус на поддержании скорости воронки', contractStageDeals > 0 ? 'medium' : 'low'),
+    ],
+    sensors: [
+      buildDomainSignal('Hot queue volume', salesItems.length > 5 ? 'high' : 'low', `${salesItems.length}`),
+      buildDomainSignal('Next step signal', (qualitySummary.next_step_signal_percent ?? 0) < 80 ? 'medium' : 'low', Number.isFinite(qualitySummary.next_step_signal_percent) ? `${qualitySummary.next_step_signal_percent}%` : '—'),
+      buildDomainSignal('Executed recommendations', (feedbackSummary.executed_rate ?? 0) < 0.55 ? 'medium' : 'low', `${Math.round((feedbackSummary.executed_rate ?? 0) * 100)}%`),
     ],
   };
 }
@@ -2198,16 +2288,31 @@ function buildOperationsDomainSummary({ queueItems, ownerSummary, qualitySummary
   return {
     summary: `Производственный контур сейчас показывает ${opsItems.length} сделок с операционным давлением, ${urgentOpsItems} срочных кейсов по субаренде/логистике и покрытие резерва ${reserveCoverage}%. Баланс собственного парка к субаренде: ${ownFleetShare}% / ${subrentShare}%.`,
     kpis: [
-      { label: 'Ops Pressure', value: String(opsItems.length), tone: opsItems.length > 0 ? 'high' : 'low' },
-      { label: 'Urgent Ops', value: String(urgentOpsItems), tone: urgentOpsItems > 0 ? 'critical' : 'low' },
-      { label: 'Own Fleet Share', value: Number.isFinite(ownFleetShare) ? `${ownFleetShare}%` : '—', tone: 'medium' },
-      { label: 'Subrent Share', value: Number.isFinite(subrentShare) ? `${subrentShare}%` : '—', tone: subrentShare > 40 ? 'high' : 'medium' },
-      { label: 'Reserve Coverage', value: Number.isFinite(reserveCoverage) ? `${reserveCoverage}%` : '—', tone: reserveCoverage < 50 ? 'high' : 'medium' },
-      { label: 'Partner Coverage', value: Number.isFinite(partnerCoverage) ? `${partnerCoverage}%` : '—', tone: 'medium' },
-      { label: 'Load Ready', value: Number.isFinite(strategicLoadReady) ? `${strategicLoadReady}%` : '—', tone: 'medium' },
-      { label: 'Logistics Context', value: Number.isFinite(logisticsContext) ? `${logisticsContext}%` : '—', tone: logisticsContext < 60 ? 'high' : 'low' },
-      { label: 'Geo Hint', value: Number.isFinite(geoHint) ? `${geoHint}%` : '—', tone: 'low' },
-      { label: 'Confidence Guard', value: Number.isFinite(confidenceGuard) ? `${confidenceGuard}%` : '—', tone: confidenceGuard > 20 ? 'high' : 'low' },
+      buildKpi({ label: 'Ops Pressure', value: String(opsItems.length), tone: opsItems.length > 0 ? 'high' : 'low', target: '0', delta: opsItems.length > 0 ? `+${opsItems.length}` : '0', trend: opsItems.length > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Urgent Ops', value: String(urgentOpsItems), tone: urgentOpsItems > 0 ? 'critical' : 'low', target: '0', delta: urgentOpsItems > 0 ? `+${urgentOpsItems}` : '0', trend: urgentOpsItems > 0 ? 'up' : 'flat' }),
+      buildKpi({ label: 'Own Fleet Share', value: Number.isFinite(ownFleetShare) ? `${ownFleetShare}%` : '—', tone: 'medium', target: '60%+', delta: formatSignedNumber(ownFleetShare - 60, ' pp'), trend: ownFleetShare >= 60 ? 'up' : 'down' }),
+      buildKpi({ label: 'Subrent Share', value: Number.isFinite(subrentShare) ? `${subrentShare}%` : '—', tone: subrentShare > 40 ? 'high' : 'medium', target: '<35%', delta: formatSignedNumber(subrentShare - 35, ' pp'), trend: subrentShare > 35 ? 'up' : 'down' }),
+      buildKpi({ label: 'Reserve Coverage', value: Number.isFinite(reserveCoverage) ? `${reserveCoverage}%` : '—', tone: reserveCoverage < 50 ? 'high' : 'medium', target: '70%+', delta: formatSignedNumber(reserveCoverage - 70, ' pp'), trend: reserveCoverage >= 70 ? 'up' : 'down' }),
+      buildKpi({ label: 'Partner Coverage', value: Number.isFinite(partnerCoverage) ? `${partnerCoverage}%` : '—', tone: 'medium', target: '65%+', delta: formatSignedNumber(partnerCoverage - 65, ' pp'), trend: partnerCoverage >= 65 ? 'up' : 'down' }),
+      buildKpi({ label: 'Load Ready', value: Number.isFinite(strategicLoadReady) ? `${strategicLoadReady}%` : '—', tone: 'medium', target: '55%+', delta: formatSignedNumber(strategicLoadReady - 55, ' pp'), trend: strategicLoadReady >= 55 ? 'up' : 'down' }),
+      buildKpi({ label: 'Logistics Context', value: Number.isFinite(logisticsContext) ? `${logisticsContext}%` : '—', tone: logisticsContext < 60 ? 'high' : 'low', target: '75%+', delta: formatSignedNumber(logisticsContext - 75, ' pp'), trend: logisticsContext >= 75 ? 'up' : 'down' }),
+      buildKpi({ label: 'Geo Hint', value: Number.isFinite(geoHint) ? `${geoHint}%` : '—', tone: 'low', target: '80%+', delta: formatSignedNumber(geoHint - 80, ' pp'), trend: geoHint >= 80 ? 'up' : 'down' }),
+      buildKpi({ label: 'Confidence Guard', value: Number.isFinite(confidenceGuard) ? `${confidenceGuard}%` : '—', tone: confidenceGuard > 20 ? 'high' : 'low', target: '<10%', delta: formatSignedNumber(confidenceGuard - 10, ' pp'), trend: confidenceGuard > 10 ? 'up' : 'down' }),
+    ],
+    states: [
+      buildDomainSignal(urgentOpsItems > 0 ? 'Есть срочные кейсы по субаренде и логистике' : 'Срочного перегрева в операциях нет', urgentOpsItems > 0 ? 'critical' : 'low', `${urgentOpsItems}`),
+      buildDomainSignal(subrentShare > 35 ? 'Зависимость от субаренды выше целевого режима' : 'Субарендная зависимость в допустимой зоне', subrentShare > 35 ? 'high' : 'low', `${subrentShare}%`),
+      buildDomainSignal(reserveCoverage < 70 ? 'Резерв покрытия ниже цели' : 'Резерв покрытия достаточен', reserveCoverage < 70 ? 'high' : 'low', `${reserveCoverage}%`),
+    ],
+    decisions: [
+      buildDomainSignal(urgentOpsItems > 0 ? 'Перебросить резерв/партнеров на срочные кейсы' : 'Поддерживать текущую операционную модель', urgentOpsItems > 0 ? 'critical' : 'low'),
+      buildDomainSignal(subrentShare > 35 ? 'Снижать долю субаренды и усиливать собственный парк' : 'Сохранять текущий баланс парк/партнеры', subrentShare > 35 ? 'high' : 'low'),
+      buildDomainSignal(logisticsContext < 75 ? 'Усилить capture логистического контекста в карточках' : 'Контекст логистики уже можно использовать как управленческий сигнал', logisticsContext < 75 ? 'medium' : 'low'),
+    ],
+    sensors: [
+      buildDomainSignal('Ops pressure queue', opsItems.length > 0 ? 'high' : 'low', `${opsItems.length}`),
+      buildDomainSignal('Reserve coverage', reserveCoverage < 70 ? 'high' : 'low', `${reserveCoverage}%`),
+      buildDomainSignal('Logistics context', logisticsContext < 75 ? 'medium' : 'low', `${logisticsContext}%`),
     ],
   };
 }

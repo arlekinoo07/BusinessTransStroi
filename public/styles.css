@@ -156,6 +156,20 @@ body {
     linear-gradient(135deg, rgba(255, 250, 240, 0.96), rgba(247, 242, 232, 0.94));
 }
 
+.panel-domain-showcase {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at top right, rgba(96, 125, 139, 0.1), transparent 24%),
+    linear-gradient(135deg, rgba(252, 248, 241, 0.96), rgba(245, 240, 231, 0.94));
+}
+
+.panel-global-brief {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(circle at top left, rgba(212, 123, 42, 0.1), transparent 20%),
+    linear-gradient(135deg, rgba(255, 250, 242, 0.98), rgba(247, 243, 235, 0.96));
+}
+
 .panel-rop {
   grid-column: 1 / -1;
 }
@@ -526,6 +540,19 @@ input,
   line-height: 1.45;
 }
 
+.domain-toggle-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.domain-toggle-micro {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .domain-card {
   padding: 22px;
   display: grid;
@@ -564,6 +591,43 @@ input,
   gap: 14px;
 }
 
+.domain-live-strip {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.domain-live-item {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.domain-live-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.domain-live-box {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.domain-live-box strong {
+  display: block;
+  margin: 8px 0 6px;
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 18px;
+}
+
+.domain-live-box p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .domain-block {
   display: grid;
   gap: 10px;
@@ -574,6 +638,287 @@ input,
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.architecture-executive {
+  margin: 18px 0;
+}
+
+.global-brief-grid,
+.global-brief-nav {
+  display: grid;
+  gap: 12px;
+}
+
+.global-brief-grid {
+  grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
+}
+
+.global-brief-card {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.global-brief-card-wide {
+  background: linear-gradient(135deg, rgba(255, 246, 236, 0.96), rgba(255, 255, 255, 0.62));
+}
+
+.global-brief-card strong {
+  display: block;
+  margin-top: 8px;
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 28px;
+}
+
+.global-brief-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.global-brief-nav {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.global-brief-link {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.domain-showcase-nav {
+  margin: 18px 0 16px;
+}
+
+.domain-showcase-nav-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.domain-showcase-chip {
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.domain-showcase-chip-active {
+  border-color: rgba(31, 42, 44, 0.24);
+  background: rgba(255, 248, 235, 0.96);
+  box-shadow: 0 12px 30px rgba(64, 44, 16, 0.08);
+}
+
+.domain-showcase-chip-title,
+.domain-screen-stat strong {
+  display: block;
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 20px;
+}
+
+.domain-showcase-chip-sub {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.domain-showcase {
+  display: grid;
+  gap: 18px;
+}
+
+.domain-screen {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.domain-screen-finance {
+  background: linear-gradient(135deg, rgba(255, 246, 236, 0.94), rgba(255, 255, 255, 0.62));
+}
+
+.domain-screen-marketing {
+  background: linear-gradient(135deg, rgba(242, 247, 238, 0.94), rgba(255, 255, 255, 0.62));
+}
+
+.domain-screen-sales {
+  background: linear-gradient(135deg, rgba(255, 242, 238, 0.94), rgba(255, 255, 255, 0.62));
+}
+
+.domain-screen-operations {
+  background: linear-gradient(135deg, rgba(242, 247, 251, 0.94), rgba(255, 255, 255, 0.62));
+}
+
+.domain-screen-hero,
+.domain-screen-meta,
+.domain-screen-grid,
+.domain-blueprint-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.domain-screen-hero {
+  grid-template-columns: 1.5fr 1fr;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.domain-screen-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.domain-screen-stat,
+.domain-screen-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.domain-screen-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.domain-screen-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.domain-screen-action {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.domain-screen-card-wide {
+  grid-column: 1 / -1;
+}
+
+.domain-screen-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.domain-blueprint-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.architecture-executive-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.95fr;
+  gap: 16px;
+}
+
+.architecture-executive-card {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.architecture-executive-card-wide {
+  background: linear-gradient(135deg, rgba(255, 247, 239, 0.96), rgba(255, 255, 255, 0.6));
+}
+
+.architecture-executive-head,
+.architecture-agenda-top,
+.architecture-heatmap-item,
+.architecture-heatmap-metrics {
+  display: flex;
+  align-items: center;
+}
+
+.architecture-executive-head,
+.architecture-heatmap-item {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.architecture-agenda-list,
+.architecture-heatmap-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.architecture-agenda-item {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.architecture-agenda-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(31, 42, 44, 0.08);
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 18px;
+}
+
+.architecture-agenda-top {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.architecture-agenda-item p {
+  margin: 8px 0 4px;
+}
+
+.architecture-agenda-summary {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.architecture-heatmap-item {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.64);
+  text-align: left;
+  cursor: pointer;
+}
+
+.architecture-heatmap-item strong,
+.architecture-heatmap-item span {
+  display: block;
+}
+
+.architecture-heatmap-item span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.architecture-heatmap-metrics {
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .domain-focus {
@@ -655,11 +1000,62 @@ input,
   background: rgba(255, 255, 255, 0.65);
 }
 
+.focus-kpi-card-critical {
+  border-color: rgba(192, 64, 40, 0.28);
+  background: rgba(255, 242, 238, 0.82);
+}
+
+.focus-kpi-card-high {
+  border-color: rgba(197, 128, 40, 0.24);
+  background: rgba(255, 248, 236, 0.82);
+}
+
+.focus-kpi-card-medium {
+  border-color: rgba(140, 126, 60, 0.22);
+}
+
 .focus-kpi-card strong {
   display: block;
   margin: 4px 0 10px;
   font-family: "Iowan Old Style", "Palatino Linotype", serif;
   font-size: 24px;
+}
+
+.focus-kpi-meta,
+.focus-kpi-trend-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.focus-kpi-trend-row {
+  margin-top: 10px;
+}
+
+.focus-kpi-sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.focus-kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.focus-kpi-trend-up {
+  color: var(--medium);
+}
+
+.focus-kpi-trend-down {
+  color: var(--critical);
+}
+
+.focus-kpi-trend-flat {
+  color: var(--low);
 }
 
 .focus-health-row {
@@ -681,6 +1077,67 @@ input,
   margin-top: 6px;
   font-family: "Iowan Old Style", "Palatino Linotype", serif;
   font-size: 22px;
+}
+
+.focus-health-note {
+  margin-top: 12px;
+  color: var(--muted);
+}
+
+.focus-overview-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.focus-overview-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.focus-overview-card strong {
+  display: block;
+  margin: 10px 0 6px;
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 20px;
+}
+
+.focus-overview-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.focus-signal-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.focus-signal-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.focus-signal-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.focus-signal-value {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.focus-signal-card p {
+  margin: 0;
 }
 
 .focus-link-list {
@@ -750,8 +1207,16 @@ input,
   .hero,
   .layout,
   .architecture-rail,
+  .architecture-executive-grid,
+  .global-brief-grid,
+  .global-brief-nav,
+  .domain-showcase-nav-bar,
   .domain-selector-bar,
   .domain-cards,
+  .domain-screen-hero,
+  .domain-screen-meta,
+  .domain-screen-grid,
+  .domain-blueprint-grid,
   .domain-focus-hero,
   .focus-health-row,
   .focus-kpi-grid,
