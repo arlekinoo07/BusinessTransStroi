@@ -1,0 +1,2583 @@
+import { domainArchitecture, getDomainByName, getDomains } from '/app/domain-architecture.js';
+
+const els = {
+  refreshAll: document.querySelector('#refreshAll'),
+  loadFirstCard: document.querySelector('#loadFirstCard'),
+  presentationRail: document.querySelector('#presentationRail'),
+  processIngestButton: document.querySelector('#processIngestButton'),
+  retryIngestButton: document.querySelector('#retryIngestButton'),
+  syncVectorsButton: document.querySelector('#syncVectorsButton'),
+  syncGraphButton: document.querySelector('#syncGraphButton'),
+  loadCardButton: document.querySelector('#loadCardButton'),
+  queueLimit: document.querySelector('#queueLimit'),
+  queueBucket: document.querySelector('#queueBucket'),
+  queueState: document.querySelector('#queueState'),
+  queueMode: document.querySelector('#queueMode'),
+  queueSearch: document.querySelector('#queueSearch'),
+  ropType: document.querySelector('#ropType'),
+  logisticsMode: document.querySelector('#logisticsMode'),
+  ownerStrategy: document.querySelector('#ownerStrategy'),
+  userRole: document.querySelector('#userRole'),
+  cardIdInput: document.querySelector('#cardIdInput'),
+  heroStats: document.querySelector('#heroStats'),
+  globalBrief: document.querySelector('#globalBrief'),
+  architectureIntro: document.querySelector('#architectureIntro'),
+  architectureMap: document.querySelector('#architectureMap'),
+  architectureExecutive: document.querySelector('#architectureExecutive'),
+  domainSelector: document.querySelector('#domainSelector'),
+  domainCards: document.querySelector('#domainCards'),
+  domainFocus: document.querySelector('#domainFocus'),
+  domainShowcaseIntro: document.querySelector('#domainShowcaseIntro'),
+  domainShowcaseNav: document.querySelector('#domainShowcaseNav'),
+  domainShowcase: document.querySelector('#domainShowcase'),
+  queueList: document.querySelector('#queueList'),
+  ropList: document.querySelector('#ropList'),
+  qualitySummary: document.querySelector('#qualitySummary'),
+  qualityList: document.querySelector('#qualityList'),
+  normalizationSummary: document.querySelector('#normalizationSummary'),
+  normalizationList: document.querySelector('#normalizationList'),
+  normalizationAction: document.querySelector('#normalizationAction'),
+  feedbackLearningSummary: document.querySelector('#feedbackLearningSummary'),
+  feedbackLearningList: document.querySelector('#feedbackLearningList'),
+  feedbackRecentList: document.querySelector('#feedbackRecentList'),
+  auditList: document.querySelector('#auditList'),
+  logisticsList: document.querySelector('#logisticsList'),
+  ownerSummary: document.querySelector('#ownerSummary'),
+  ownerList: document.querySelector('#ownerList'),
+  systemStatusSummary: document.querySelector('#systemStatusSummary'),
+  dictionarySummary: document.querySelector('#dictionarySummary'),
+  dictionaryList: document.querySelector('#dictionaryList'),
+  cardView: document.querySelector('#cardView'),
+  pendingList: document.querySelector('#pendingList'),
+  errorList: document.querySelector('#errorList'),
+};
+
+const uiState = {
+  currentCardId: 'opp-1001',
+  auth: null,
+  activeDomain: 'Финансы',
+  domainLiveData: {},
+  domainLiveGeneratedAt: null,
+};
+
+function syncHash(fragment) {
+  if (!fragment) return;
+  const nextHash = `#${fragment}`;
+  if (window.location.hash !== nextHash) {
+    window.history.replaceState(null, '', nextHash);
+  }
+}
+
+async function api(path, options) {
+  const headers = new Headers(options?.headers ?? {});
+  headers.set('x-user-role', els.userRole.value || 'admin');
+  headers.set('x-user-name', `UI ${els.userRole.value || 'admin'}`);
+  headers.set('x-user-id', `ui-${els.userRole.value || 'admin'}`);
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('ru-RU');
+}
+
+function badgeClass(bucket) {
+  return `badge badge-${bucket}`;
+}
+
+function renderListBadges(items, tone = 'low') {
+  return items.map((item) => `<span class="badge badge-${tone}">${item}</span>`).join('');
+}
+
+function renderSignalCards(items, emptyText) {
+  if (!items?.length) {
+    return `<div class="empty">${emptyText}</div>`;
+  }
+
+  return `
+    <div class="focus-signal-list">
+      ${items.map((item) => `
+        <article class="focus-signal-card">
+          <div class="focus-signal-top">
+            <span class="badge badge-${item.tone ?? 'low'}">${item.tone ?? 'low'}</span>
+            ${item.value ? `<span class="focus-signal-value">${item.value}</span>` : ''}
+          </div>
+          <p>${item.label}</p>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderPanelLinks(panelCodes) {
+  return panelCodes
+    .map((code) => domainArchitecture.panels[code])
+    .filter(Boolean)
+    .map((panel) => `
+      <button class="focus-link" type="button" data-panel-target="${panel.target}">
+        <span class="focus-link-title">${panel.title}</span>
+        <span class="focus-link-subtitle">Открыть связанный operational-блок</span>
+      </button>
+    `)
+    .join('');
+}
+
+function getDomainTone(accent) {
+  if (accent === 'finance') return 'high';
+  if (accent === 'marketing') return 'medium';
+  if (accent === 'sales') return 'critical';
+  return 'low';
+}
+
+function buildDomainHealthSnapshot(kpis) {
+  const critical = kpis.filter((item) => item.tone === 'critical').length;
+  const high = kpis.filter((item) => item.tone === 'high').length;
+  const medium = kpis.filter((item) => item.tone === 'medium').length;
+  const down = kpis.filter((item) => item.trend === 'down').length;
+  const improved = kpis.filter((item) => item.trend === 'up' && (item.tone === 'low' || item.tone === 'medium')).length;
+
+  let state = 'stable';
+  if (critical > 0) state = 'critical';
+  else if (high > 1) state = 'attention';
+  else if (high > 0 || medium > 2) state = 'watch';
+
+  return { critical, high, medium, down, improved, state };
+}
+
+function getTrendSymbol(trend) {
+  if (trend === 'up') return '↑';
+  if (trend === 'down') return '↓';
+  return '→';
+}
+
+function getDomainStateLabel(state) {
+  if (state === 'critical') return 'critical';
+  if (state === 'attention') return 'attention';
+  if (state === 'watch') return 'watch';
+  return 'stable';
+}
+
+function getStateNarrative(domainName, health) {
+  if (health.state === 'critical') {
+    return `${domainName} требует немедленного управленческого внимания: есть критичные сигналы или накопление high-risk KPI.`;
+  }
+  if (health.state === 'attention') {
+    return `${domainName} находится в зоне внимания: контур работает, но несколько KPI уже отклоняются от целевого режима.`;
+  }
+  if (health.state === 'watch') {
+    return `${domainName} пока контролируем, но часть метрик требует наблюдения и точечных решений.`;
+  }
+  return `${domainName} выглядит устойчиво: критичных сигналов нет, контур близок к целевому режиму работы.`;
+}
+
+function getKpiToneWeight(tone) {
+  if (tone === 'critical') return 4;
+  if (tone === 'high') return 3;
+  if (tone === 'medium') return 2;
+  return 1;
+}
+
+function getKpiPriorityScore(kpi) {
+  return getKpiToneWeight(kpi.tone) * 10 + (kpi.trend === 'down' ? 3 : 0) + (kpi.trend === 'up' && getKpiToneWeight(kpi.tone) >= 3 ? 2 : 0);
+}
+
+function buildKpiOverview(kpis) {
+  const sorted = [...kpis].sort((left, right) => getKpiPriorityScore(right) - getKpiPriorityScore(left));
+  const hot = sorted.slice(0, 3);
+  const improving = kpis.filter((item) => item.trend === 'up' && (item.tone === 'low' || item.tone === 'medium')).slice(0, 2);
+  return { hot, improving };
+}
+
+function summarizeDomainLive(domain) {
+  const liveData = uiState.domainLiveData[domain.name] ?? {};
+  const effectiveKpis = liveData.kpis ?? domain.dashboard.kpis ?? [];
+  const health = buildDomainHealthSnapshot(effectiveKpis);
+  const overview = buildKpiOverview(effectiveKpis);
+  const topAlert = overview.hot[0] ?? null;
+  const topDecision = (liveData.decisions ?? [])[0] ?? null;
+
+  return {
+    liveData,
+    effectiveKpis,
+    health,
+    overview,
+    topAlert,
+    topDecision,
+  };
+}
+
+function buildExecutiveAgenda() {
+  const domainSummaries = getDomains().map((domain) => ({
+    domain,
+    ...summarizeDomainLive(domain),
+  }));
+
+  const rankedDomains = [...domainSummaries].sort((left, right) => {
+    const leftScore = (left.health.critical * 100) + (left.health.high * 10) + left.health.down;
+    const rightScore = (right.health.critical * 100) + (right.health.high * 10) + right.health.down;
+    return rightScore - leftScore;
+  });
+
+  const actionItems = rankedDomains
+    .map((item) => ({
+      domain: item.domain.name,
+      accent: item.domain.accent,
+      label: item.topDecision?.label ?? item.topAlert?.label ?? 'Поддерживать текущий режим',
+      tone: item.topDecision?.tone ?? item.topAlert?.tone ?? 'low',
+      summary: item.liveData.summary ?? item.domain.meta.executiveSummary,
+      state: item.health.state,
+    }))
+    .slice(0, 4);
+
+  return { rankedDomains, actionItems };
+}
+
+function renderGlobalBrief() {
+  const executiveAgenda = buildExecutiveAgenda();
+  const criticalDomains = executiveAgenda.rankedDomains.filter((item) => item.health.state === 'critical').length;
+  const attentionDomains = executiveAgenda.rankedDomains.filter((item) => item.health.state === 'attention').length;
+  const totalCritical = executiveAgenda.rankedDomains.reduce((sum, item) => sum + item.health.critical, 0);
+  const totalHigh = executiveAgenda.rankedDomains.reduce((sum, item) => sum + item.health.high, 0);
+
+  els.globalBrief.innerHTML = `
+    <div class="global-brief-grid">
+      <section class="global-brief-card global-brief-card-wide">
+        <div>
+          <p class="panel-kicker">System Brief</p>
+          <h2>Короткая управленческая сводка по всей системе</h2>
+        </div>
+        <p class="hero-text">
+          На странице уже собраны 4 управленческих контура, общий executive agenda и отдельные доменные экраны.
+          Ниже можно быстро перейти к ключевым секциям или сразу провалиться в самый проблемный домен.
+        </p>
+        <div class="global-brief-actions">
+          <button class="domain-screen-action" type="button" data-brief-jump="architecture">К архитектуре</button>
+          <button class="domain-screen-action" type="button" data-brief-jump="showcase">К доменным экранам</button>
+          <button class="domain-screen-action" type="button" data-brief-domain="${executiveAgenda.rankedDomains[0]?.domain.name ?? 'Финансы'}">Открыть главный риск</button>
+        </div>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Critical Domains</span>
+        <strong>${criticalDomains}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Attention Domains</span>
+        <strong>${attentionDomains}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">Critical KPI Count</span>
+        <strong>${totalCritical}</strong>
+      </section>
+      <section class="global-brief-card">
+        <span class="domain-label">High KPI Count</span>
+        <strong>${totalHigh}</strong>
+      </section>
+    </div>
+    <div class="global-brief-nav">
+      <button class="global-brief-link" type="button" data-brief-panel="panel-queue">Queue</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-rop">Escalations</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-owner">Owner Dashboard</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-logistics">Production / Logistics</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-quality">Data Quality</button>
+      <button class="global-brief-link" type="button" data-brief-panel="panel-system">System Status</button>
+    </div>
+  `;
+
+  document.querySelectorAll('[data-brief-panel]').forEach((node) => {
+    node.addEventListener('click', () => {
+      document.getElementById(node.dataset.briefPanel)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-brief-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      if (node.dataset.briefJump === 'architecture') {
+        document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (node.dataset.briefJump === 'showcase') {
+        document.querySelector('.panel-domain-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-brief-domain]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.briefDomain;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function renderPresentationRail() {
+  const executiveAgenda = buildExecutiveAgenda();
+  const leadDomain = executiveAgenda.rankedDomains[0]?.domain.name ?? uiState.activeDomain;
+
+  els.presentationRail.innerHTML = `
+    <div class="presentation-rail-grid">
+      <div class="presentation-rail-copy">
+        <span class="badge badge-high">Presentation Mode</span>
+        <strong>Активный контур: ${uiState.activeDomain}</strong>
+        <span>Главный риск сейчас: ${leadDomain}</span>
+      </div>
+      <div class="presentation-rail-links">
+        <button class="presentation-rail-link" type="button" data-rail-jump="global">Brief</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="architecture">Architecture</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="showcase">Domain Screens</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="queue">Queue</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="owner">Owner</button>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('[data-rail-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const key = node.dataset.railJump;
+      const targetMap = {
+        global: '.panel-global-brief',
+        architecture: '.panel-architecture',
+        showcase: '.panel-domain-showcase',
+        queue: '#panel-queue',
+        owner: '#panel-owner',
+      };
+      document.querySelector(targetMap[key])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      syncHash(key);
+    });
+  });
+}
+
+function renderDomainShowcase() {
+  els.domainShowcaseIntro.innerHTML = `
+    <article class="architecture-story">
+      <div>
+        <p class="panel-kicker">Domain Narrative</p>
+        <h3>Каждый контур развернут как отдельный управленческий экран</h3>
+      </div>
+      <p class="hero-text">
+        Ниже домены показаны уже не как краткие карточки, а как полноценные смысловые экраны:
+        с executive-narrative, живыми KPI, состояниями S3, решениями S2, сенсорами S4 и точками входа
+        в operational-панели текущего интерфейса.
+      </p>
+    </article>
+  `;
+
+  els.domainShowcaseNav.innerHTML = `
+    <div class="domain-showcase-nav-bar">
+      ${getDomains().map((domain) => `
+        <button class="domain-showcase-chip ${uiState.activeDomain === domain.name ? 'domain-showcase-chip-active' : ''}" type="button" data-showcase-jump="${domain.name}">
+          <span class="domain-showcase-chip-title">${domain.name}</span>
+          <span class="domain-showcase-chip-sub">${domain.meta.audience}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  els.domainShowcase.innerHTML = getDomains().map((domain) => {
+    const summary = summarizeDomainLive(domain);
+    const { meta, architecture } = domain;
+    const liveStates = summary.liveData.states ?? [];
+    const liveDecisions = summary.liveData.decisions ?? [];
+    const liveSensors = summary.liveData.sensors ?? [];
+    const liveSummary = summary.liveData.summary ?? meta.executiveSummary;
+
+    return `
+      <article class="domain-screen domain-screen-${domain.accent}" id="domain-screen-${domain.name}">
+        <div class="domain-screen-hero">
+          <div>
+            <p class="panel-kicker">Domain Screen</p>
+            <h3>${domain.name}</h3>
+            <p class="domain-role">${meta.storyline}</p>
+          </div>
+          <div class="domain-screen-meta">
+            <div class="domain-screen-stat">
+              <span class="domain-label">State</span>
+              <strong>${getDomainStateLabel(summary.health.state)}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">Audience</span>
+              <strong>${meta.audience}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">Critical</span>
+              <strong>${summary.health.critical}</strong>
+            </div>
+            <div class="domain-screen-stat">
+              <span class="domain-label">High</span>
+              <strong>${summary.health.high}</strong>
+            </div>
+          </div>
+        </div>
+        <div class="domain-screen-actions">
+          <button class="domain-screen-action" type="button" data-focus-domain="${domain.name}">Открыть focus-блок</button>
+          <button class="domain-screen-action" type="button" data-scroll-top="architecture">К архитектуре</button>
+        </div>
+
+        <div class="domain-screen-grid">
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Executive Narrative</span>
+            <p>${liveSummary}</p>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Что делает контур</span>
+            <p>${meta.role}</p>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Top Decision</span>
+            <p>${summary.topDecision?.label ?? 'Система не видит решения, требующего немедленной эскалации.'}</p>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Core KPI Layer</span>
+            <div class="focus-kpi-grid">
+              ${summary.effectiveKpis.map((item) => `
+                <article class="focus-kpi-card focus-kpi-card-${item.tone}">
+                  <span class="stat-label">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <div class="focus-kpi-meta">
+                    <span class="badge badge-${item.tone}">${item.tone}</span>
+                    ${item.target ? `<span class="focus-kpi-sub">Target: ${item.target}</span>` : ''}
+                  </div>
+                  <div class="focus-kpi-trend-row">
+                    <span class="focus-kpi-trend focus-kpi-trend-${item.trend ?? 'flat'}">${getTrendSymbol(item.trend)} ${item.trend ?? 'flat'}</span>
+                    ${item.delta ? `<span class="focus-kpi-sub">Delta: ${item.delta}</span>` : ''}
+                  </div>
+                </article>
+              `).join('')}
+            </div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Live States S3</span>
+            ${renderSignalCards(liveStates, 'Состояния пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Recommended Decisions S2</span>
+            ${renderSignalCards(liveDecisions, 'Решения пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Evidence Signals S4</span>
+            ${renderSignalCards(liveSensors, 'Сенсоры пока не рассчитаны.')}
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Management Risks</span>
+            <div class="badge-row">${renderListBadges(architecture.risks, 'critical')}</div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Key Outcomes</span>
+            <div class="badge-row">${renderListBadges(architecture.outcomes, 'low')}</div>
+          </section>
+          <section class="domain-screen-card">
+            <span class="domain-label">Indices</span>
+            <div class="badge-row">${renderListBadges(architecture.indices, 'medium')}</div>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Operational Entry Points</span>
+            <div class="focus-link-list">
+              ${renderPanelLinks(domain.panels ?? [])}
+            </div>
+          </section>
+          <section class="domain-screen-card domain-screen-card-wide">
+            <span class="domain-label">Domain Blueprint</span>
+            <div class="domain-blueprint-grid">
+              <div>
+                <span class="domain-label">Processes</span>
+                <div class="badge-row">${renderListBadges(architecture.processes, 'low')}</div>
+              </div>
+              <div>
+                <span class="domain-label">States</span>
+                <div class="badge-row">${renderListBadges(architecture.states, 'high')}</div>
+              </div>
+              <div>
+                <span class="domain-label">Decisions</span>
+                <div class="badge-row">${renderListBadges(architecture.decisions, 'critical')}</div>
+              </div>
+              <div>
+                <span class="domain-label">Sensors</span>
+                <div class="badge-row">${renderListBadges(architecture.sensors, 'medium')}</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  document.querySelectorAll('[data-showcase-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.showcaseJump;
+      const target = document.getElementById(`domain-screen-${domainName}`);
+      if (!target) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`domain-${domainName}`);
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('.panel-domain-showcase [data-panel-target]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const target = document.getElementById(node.dataset.panelTarget);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-focus-domain]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.focusDomain;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
+      const target = document.querySelector('.panel-architecture');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-scroll-top="architecture"]').forEach((node) => {
+    node.addEventListener('click', () => {
+      document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function renderDomainFocus(domain) {
+  if (!domain) return;
+
+  const panelItems = (domain.panels ?? [])
+    .map((code) => domainArchitecture.panels[code])
+    .filter(Boolean);
+  const { meta, architecture, dashboard } = domain;
+  const liveData = uiState.domainLiveData[domain.name] ?? {};
+  const effectiveKpis = liveData.kpis ?? dashboard.kpis;
+  const liveSummary = liveData.summary ?? meta.executiveSummary;
+  const liveStates = liveData.states ?? [];
+  const liveDecisions = liveData.decisions ?? [];
+  const liveSensors = liveData.sensors ?? [];
+  const health = buildDomainHealthSnapshot(effectiveKpis);
+  const overview = buildKpiOverview(effectiveKpis);
+  const highlightedKpis = effectiveKpis.filter((item) => item.tone === 'critical' || item.tone === 'high');
+  const liveStamp = uiState.domainLiveGeneratedAt ? formatDateTime(uiState.domainLiveGeneratedAt) : '—';
+
+  els.domainFocus.innerHTML = `
+    <article class="domain-focus-card domain-focus-${domain.accent}">
+      <div class="domain-focus-hero">
+        <div>
+          <p class="panel-kicker">Focus Domain</p>
+          <h3>${domain.name}</h3>
+          <p class="domain-role">${meta.storyline}</p>
+        </div>
+        <div class="focus-meta">
+          <div class="focus-meta-item">
+            <span class="domain-label">Кому нужен блок</span>
+            <strong>${meta.audience}</strong>
+          </div>
+          <div class="focus-meta-item">
+            <span class="domain-label">Целевой результат</span>
+            <strong>${architecture.outcomes[0]}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="focus-grid">
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Executive summary</span>
+          <p>${liveSummary}</p>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Health Snapshot</span>
+          <div class="focus-health-row">
+            <article class="focus-health-card">
+              <span class="stat-label">Domain State</span>
+              <strong>${getDomainStateLabel(health.state)}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Critical KPIs</span>
+              <strong>${health.critical}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">High KPIs</span>
+              <strong>${health.high}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Updated</span>
+              <strong>${liveStamp}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Down Trends</span>
+              <strong>${health.down}</strong>
+            </article>
+            <article class="focus-health-card">
+              <span class="stat-label">Improving KPIs</span>
+              <strong>${health.improved}</strong>
+            </article>
+          </div>
+          <p class="focus-health-note">${getStateNarrative(domain.name, health)}</p>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Priority Drivers</span>
+          <div class="focus-overview-list">
+            ${overview.hot.length
+              ? overview.hot.map((item) => `
+                <article class="focus-overview-card">
+                  <span class="badge badge-${item.tone}">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <p>${item.target ? `Target ${item.target}` : 'Цель не задана'}${item.delta ? ` · delta ${item.delta}` : ''}</p>
+                </article>
+              `).join('')
+              : '<div class="empty">Сильных отклонений по домену сейчас нет.</div>'}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Positive Signals</span>
+          <div class="focus-overview-list">
+            ${overview.improving.length
+              ? overview.improving.map((item) => `
+                <article class="focus-overview-card">
+                  <span class="badge badge-low">${item.label}</span>
+                  <strong>${item.value}</strong>
+                  <p>${item.target ? `Target ${item.target}` : 'Сигнал без target'}${item.delta ? ` · delta ${item.delta}` : ''}</p>
+                </article>
+              `).join('')
+              : '<div class="empty">Явных позитивных сигналов пока мало, домену нужен дальнейший разгон.</div>'}
+          </div>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Live States S3</span>
+          ${renderSignalCards(liveStates, 'Состояния домена пока не загружены.')}
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Recommended Decisions S2</span>
+          ${renderSignalCards(liveDecisions, 'Решения по домену пока не рассчитаны.')}
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Evidence Signals S4</span>
+          ${renderSignalCards(liveSensors, 'Сенсоры домена пока не загружены.')}
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Мини-дашборд домена</span>
+          <div class="focus-kpi-grid">
+            ${effectiveKpis.map((item) => `
+              <article class="focus-kpi-card focus-kpi-card-${item.tone}">
+                <span class="stat-label">${item.label}</span>
+                <strong>${item.value}</strong>
+                <div class="focus-kpi-meta">
+                  <span class="badge badge-${item.tone}">${item.tone}</span>
+                  ${item.target ? `<span class="focus-kpi-sub">Target: ${item.target}</span>` : ''}
+                </div>
+                <div class="focus-kpi-trend-row">
+                  <span class="focus-kpi-trend focus-kpi-trend-${item.trend ?? 'flat'}">${getTrendSymbol(item.trend)} ${item.trend ?? 'flat'}</span>
+                  ${item.delta ? `<span class="focus-kpi-sub">Delta: ${item.delta}</span>` : ''}
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+        <section class="focus-section focus-section-wide">
+          <span class="domain-label">Priority Alerts</span>
+          <div class="badge-row">
+            ${highlightedKpis.length
+              ? highlightedKpis.map((item) => `<span class="badge badge-${item.tone}">${item.label}: ${item.value}${item.delta ? ` · ${item.delta}` : ''}${item.target ? ` · target ${item.target}` : ''}</span>`).join('')
+              : '<span class="badge badge-low">Критичных сигналов по домену сейчас нет</span>'}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Как это работает на сайте</span>
+          <p>
+            Сначала система считывает <strong>${architecture.sensors.slice(0, 2).join(' и ')}</strong>,
+            затем агрегирует их в состояния уровня S3 и только после этого поднимает решения и эскалации
+            для роли <strong>${meta.audience.split(',')[0]}</strong>.
+          </p>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Где смотреть на этой странице</span>
+          <div class="focus-link-list">
+            ${panelItems.map((panel) => `
+              <button class="focus-link" type="button" data-panel-target="${panel.target}">
+                <span class="focus-link-title">${panel.title}</span>
+                <span class="focus-link-subtitle">Перейти к связанному operational-блоку</span>
+              </button>
+            `).join('')}
+          </div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Ожидаемые решения</span>
+          <div class="badge-row">${renderListBadges(architecture.decisions, 'critical')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Ключевые состояния</span>
+          <div class="badge-row">${renderListBadges(architecture.states, 'high')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Конечные эффекты</span>
+          <div class="badge-row">${renderListBadges(architecture.outcomes, 'low')}</div>
+        </section>
+        <section class="focus-section">
+          <span class="domain-label">Основные риски для руководителя</span>
+          <div class="badge-row">${renderListBadges(architecture.risks, 'critical')}</div>
+        </section>
+      </div>
+    </article>
+  `;
+
+  document.querySelectorAll('[data-panel-target]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const target = document.getElementById(node.dataset.panelTarget);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function applyDomainPanelHighlight(domain) {
+  const activeCodes = new Set(domain?.panels ?? []);
+  document.querySelectorAll('[data-panel-code]').forEach((panel) => {
+    const isActive = activeCodes.has(panel.dataset.panelCode);
+    panel.classList.toggle('panel-domain-active', isActive);
+    panel.classList.toggle('panel-domain-muted', !isActive);
+  });
+}
+
+function renderArchitectureOverview() {
+  const executiveAgenda = buildExecutiveAgenda();
+
+  els.architectureIntro.innerHTML = `
+    <article class="architecture-story">
+      <div>
+        <p class="panel-kicker">Concept Core</p>
+        <h3>Сайт показывает не только очередь сделок, но и всю модель управленческой системы</h3>
+      </div>
+      <p class="hero-text">
+        Мы используем финансы как исходный контур и расширяем ту же архитектуру на маркетинг, продажи и производство.
+        Для каждого блока на сайте должна быть видна одна и та же логика: какие сигналы система читает,
+        в какие состояния их собирает и какие решения затем предлагает руководителям.
+      </p>
+    </article>
+  `;
+
+  els.architectureMap.innerHTML = `
+    <div class="architecture-rail">
+      ${domainArchitecture.model.stages.map((stage, index) => `
+        <article class="architecture-stage">
+          <div class="architecture-stage-code">${stage.code}</div>
+          <div>
+            <h3>${stage.title}</h3>
+            <p>${stage.description}</p>
+          </div>
+          ${index < domainArchitecture.model.stages.length - 1 ? '<div class="architecture-arrow">→</div>' : ''}
+        </article>
+      `).join('')}
+    </div>
+  `;
+
+  els.architectureExecutive.innerHTML = `
+    <div class="architecture-executive-grid">
+      <section class="architecture-executive-card architecture-executive-card-wide">
+        <div class="architecture-executive-head">
+          <div>
+            <p class="panel-kicker">Executive Agenda</p>
+            <h3>Что руководителю важно разобрать в первую очередь</h3>
+          </div>
+          <span class="badge badge-high">${executiveAgenda.actionItems.length} actions</span>
+        </div>
+        <div class="architecture-agenda-list">
+          ${executiveAgenda.actionItems.map((item, index) => `
+            <article class="architecture-agenda-item">
+              <span class="architecture-agenda-rank">0${index + 1}</span>
+              <div>
+                <div class="architecture-agenda-top">
+                  <strong>${item.domain}</strong>
+                  <span class="badge badge-${item.tone}">${getDomainStateLabel(item.state)}</span>
+                </div>
+                <p>${item.label}</p>
+                <span class="architecture-agenda-summary">${item.summary}</span>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      </section>
+      <section class="architecture-executive-card">
+        <p class="panel-kicker">Portfolio Heatmap</p>
+        <h3>Сравнение контуров</h3>
+        <div class="architecture-heatmap-list">
+          ${executiveAgenda.rankedDomains.map((item) => `
+            <button class="architecture-heatmap-item" type="button" data-domain-jump="${item.domain.name}">
+              <div>
+                <strong>${item.domain.name}</strong>
+                <span>${getDomainStateLabel(item.health.state)}</span>
+              </div>
+              <div class="architecture-heatmap-metrics">
+                <span>C ${item.health.critical}</span>
+                <span>H ${item.health.high}</span>
+                <span>D ${item.health.down}</span>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+  `;
+
+  els.domainSelector.innerHTML = `
+    <div class="domain-selector-bar">
+      ${getDomains().map((domain) => `
+        ${(() => {
+          const summary = summarizeDomainLive(domain);
+          return `
+        <button
+          class="domain-toggle ${uiState.activeDomain === domain.name ? 'domain-toggle-active' : ''}"
+          data-domain-name="${domain.name}"
+          type="button"
+        >
+          <span class="domain-toggle-title">${domain.name}</span>
+          <span class="domain-toggle-subtitle">${domain.architecture.processes[0]} · ${domain.architecture.states[0]}</span>
+          <span class="domain-toggle-meta">
+            <span class="badge badge-${summary.health.state === 'critical' ? 'critical' : summary.health.state === 'attention' ? 'high' : summary.health.state === 'watch' ? 'medium' : 'low'}">${getDomainStateLabel(summary.health.state)}</span>
+            <span class="domain-toggle-micro">${summary.health.critical} critical · ${summary.health.high} high</span>
+          </span>
+        </button>
+        `;
+        })()}
+      `).join('')}
+    </div>
+  `;
+
+  els.domainCards.innerHTML = getDomains().map((domain) => {
+    const summary = summarizeDomainLive(domain);
+    return `
+    <article class="domain-card domain-card-${domain.accent} ${uiState.activeDomain === domain.name ? 'domain-card-active' : ''}" data-domain-card="${domain.name}">
+      <div class="domain-card-head">
+        <div>
+          <p class="panel-kicker">Контур</p>
+          <h3>${domain.name}</h3>
+        </div>
+        <span class="badge badge-${getDomainTone(domain.accent)}">${domain.name}</span>
+      </div>
+      <p class="domain-role">${domain.meta.role}</p>
+      <div class="domain-live-strip">
+        <span class="badge badge-${summary.health.state === 'critical' ? 'critical' : summary.health.state === 'attention' ? 'high' : summary.health.state === 'watch' ? 'medium' : 'low'}">${getDomainStateLabel(summary.health.state)}</span>
+        <span class="domain-live-item">Critical: <strong>${summary.health.critical}</strong></span>
+        <span class="domain-live-item">Down: <strong>${summary.health.down}</strong></span>
+        <span class="domain-live-item">Improving: <strong>${summary.health.improved}</strong></span>
+      </div>
+      <div class="domain-live-summary">
+        <div class="domain-live-box">
+          <span class="domain-label">Top alert</span>
+          <strong>${summary.topAlert ? `${summary.topAlert.label}: ${summary.topAlert.value}` : 'Сильных отклонений нет'}</strong>
+          <p>${summary.topAlert?.target ? `Target ${summary.topAlert.target}` : 'Контур без явного критичного отклонения'}</p>
+        </div>
+        <div class="domain-live-box">
+          <span class="domain-label">Top decision</span>
+          <strong>${summary.topDecision?.label ?? 'Решение не требуется'}</strong>
+          <p>${summary.liveData.summary ?? domain.meta.executiveSummary}</p>
+        </div>
+      </div>
+      <div class="domain-stack">
+        <div class="domain-block">
+          <span class="domain-label">Процессы</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.processes, 'low')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Сенсоры S4</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.sensors, 'medium')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Состояния S3</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.states, 'high')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Решения S2</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.decisions, 'critical')}</div>
+        </div>
+        <div class="domain-block">
+          <span class="domain-label">Индексы</span>
+          <div class="badge-row">${renderListBadges(domain.architecture.indices, 'low')}</div>
+        </div>
+      </div>
+    </article>
+  `;
+  }).join('');
+
+  const activeDomain = getDomainByName(uiState.activeDomain);
+  renderDomainFocus(activeDomain);
+  applyDomainPanelHighlight(activeDomain);
+
+  document.querySelectorAll('[data-domain-name], [data-domain-card]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.domainName ?? node.dataset.domainCard;
+      if (!domainName || uiState.activeDomain === domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
+    });
+  });
+
+  document.querySelectorAll('[data-domain-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.domainJump;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
+    });
+  });
+}
+
+function applyHashIntent() {
+  const raw = window.location.hash.replace(/^#/, '');
+  if (!raw) return;
+
+  if (raw.startsWith('focus-')) {
+    const domainName = decodeURIComponent(raw.slice(6));
+    uiState.activeDomain = domainName || uiState.activeDomain;
+  }
+
+  if (raw.startsWith('domain-')) {
+    const domainName = decodeURIComponent(raw.slice(7));
+    uiState.activeDomain = domainName || uiState.activeDomain;
+  }
+}
+
+function renderHeroStats(queueItems, ropItems, pendingItems, errorItems) {
+  const critical = queueItems.filter((item) => item.priority_bucket === 'critical').length;
+  const withRisk = queueItems.filter((item) => item.state_codes.includes('debt_risk') || item.state_codes.includes('hot_unworked')).length;
+
+  els.heroStats.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Роль</span>
+      <strong>${uiState.auth?.user?.role_code ?? 'admin'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Критичные</span>
+      <strong>${critical}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">В очереди</span>
+      <strong>${queueItems.length}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">С риском</span>
+      <strong>${withRisk}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Эскалации</span>
+      <strong>${ropItems.length}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest</span>
+      <strong>${pendingItems.length}/${errorItems.length}</strong>
+    </div>
+  `;
+}
+
+function renderQueue(items) {
+  if (!items.length) {
+    els.queueList.innerHTML = '<div class="empty">Очередь пока пустая.</div>';
+    return;
+  }
+
+  els.queueList.innerHTML = items.map((item) => `
+    <article class="queue-item ${item.promise_overdue || item.sla_breached ? 'queue-item-alert' : ''}" data-opportunity-id="${item.opportunity_id}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+          <div class="queue-subtitle">${item.object ?? 'Объект не определён'}</div>
+        </div>
+        <span class="${badgeClass(item.priority_bucket)}">${item.priority_bucket} · ${item.priority_score}</span>
+      </div>
+      <div class="queue-meta">
+        <span class="pill">Следующее действие: ${item.next_action ?? '—'}</span>
+        <span class="pill">Дедлайн: ${formatDateTime(item.deadline_at)}</span>
+        <span class="pill">Owner: ${item.recommended_owner ?? '—'}</span>
+        ${item.next_step_due_at ? `<span class="pill ${item.promise_overdue ? 'pill-alert' : ''}">Next step due: ${formatDateTime(item.next_step_due_at)}</span>` : ''}
+      </div>
+      <div class="muted">${item.why_now ?? 'Причина не указана'}</div>
+      ${item.loss_risk_reason ? `<div class="muted">loss risk (${item.loss_risk_level ?? '—'}): ${item.loss_risk_reason}</div>` : ''}
+      ${item.alternative_action ? `<div class="muted">alternative: ${item.alternative_action}</div>` : ''}
+      ${item.why_blocked?.length ? `<div class="muted">blocked: ${item.why_blocked.join(' · ')}</div>` : ''}
+      ${item.why_low_priority?.length ? `<div class="muted">low priority: ${item.why_low_priority.join(' · ')}</div>` : ''}
+      <div class="badge-row">
+        ${(item.priority_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
+        ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
+        ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
+        ${item.sla_breached ? `<span class="badge badge-critical">sla breach</span>` : ''}
+        ${item.loss_risk_level ? `<span class="badge badge-low">loss ${item.loss_risk_level}</span>` : ''}
+        ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
+        ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}
+      </div>
+      <div class="score-row">
+        ${Object.entries(item.score_vector).map(([key, value]) => `<span class="score-pill">${key}: ${value}</span>`).join('')}
+      </div>
+    </article>
+  `).join('');
+
+  document.querySelectorAll('.queue-item').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.cardIdInput.value = node.dataset.opportunityId;
+      loadCard(node.dataset.opportunityId);
+    });
+  });
+}
+
+function renderRopEscalations(items) {
+  if (!items.length) {
+    els.ropList.innerHTML = '<div class="empty">Управленческих эскалаций сейчас нет.</div>';
+    return;
+  }
+
+  els.ropList.innerHTML = items.map((item) => `
+    <article class="queue-item escalation ${item.promise_overdue || item.sla_breached ? 'queue-item-alert' : ''}" data-opportunity-id="${item.opportunity_id}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+          <div class="queue-subtitle">${item.object ?? 'Объект не определён'}</div>
+        </div>
+        <span class="badge badge-high">${item.escalation_type} · ${item.priority_score}</span>
+      </div>
+      <div class="queue-meta">
+        <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
+        <span class="pill">Deadline: ${formatDateTime(item.deadline_at)}</span>
+        <span class="pill">Owner: ${item.recommended_owner ?? '—'}</span>
+        ${item.next_step_due_at ? `<span class="pill ${item.promise_overdue ? 'pill-alert' : ''}">Next step due: ${formatDateTime(item.next_step_due_at)}</span>` : ''}
+      </div>
+      <div class="muted">${item.escalation_reason ?? 'Причина не указана'}</div>
+      <div class="muted">
+        evidence:
+        competitor ${item.evidence_summary?.competitor_mentions ?? 0},
+        debt ${item.evidence_summary?.debt_markers ?? 0},
+        subrent ${item.evidence_summary?.subrent_markers ?? 0},
+        promises ${item.evidence_summary?.promise_markers ?? 0}
+      </div>
+      <div class="badge-row">
+        ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
+        ${item.target_role ? `<span class="badge badge-low">${item.target_role}</span>` : ''}
+        ${item.promise_overdue ? `<span class="badge badge-critical">promise overdue</span>` : ''}
+        ${item.sla_breached ? `<span class="badge badge-critical">sla breach</span>` : ''}
+        ${(item.evidence_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
+        ${item.action_effectiveness ? `<span class="badge badge-low">accept ${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%</span>` : ''}
+        ${item.action_effectiveness ? `<span class="badge badge-low">exec ${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%</span>` : ''}
+      </div>
+    </article>
+  `).join('');
+
+  document.querySelectorAll('.queue-item.escalation').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.cardIdInput.value = node.dataset.opportunityId;
+      loadCard(node.dataset.opportunityId);
+    });
+  });
+}
+
+function renderLogisticsQueue(items) {
+  if (!items.length) {
+    els.logisticsList.innerHTML = '<div class="empty">Срочных задач для логистики сейчас нет.</div>';
+    return;
+  }
+
+  els.logisticsList.innerHTML = items.map((item) => `
+    <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+          <div class="queue-subtitle">${item.object ?? 'Объект не определён'}</div>
+        </div>
+        <span class="badge badge-high">${item.urgency_bucket} · ${item.priority_score}</span>
+      </div>
+      <div class="queue-meta">
+        <span class="pill">Техника: ${item.equipment_type ?? '—'}</span>
+        <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
+        <span class="pill">Маржа: ${item.margin_pressure ?? '—'}</span>
+        <span class="pill">Mode: ${item.economics_mode ?? '—'}</span>
+      </div>
+      <div class="muted">${item.partner_hint ?? '—'}</div>
+      <div class="muted">${item.demand_cluster_hint ?? '—'}</div>
+      <div class="muted">${item.economics_reason ?? '—'}</div>
+      ${(item.reserve_unit || item.recommended_partner) ? `
+        <div class="muted">
+          ${item.reserve_unit ? `Резерв: ${item.reserve_unit.registry_id} · ${item.reserve_unit.model} · ${item.reserve_unit.base_location}` : 'Резерв: —'}
+          ${item.recommended_partner ? ` | Партнер: ${item.recommended_partner.name} · ${item.recommended_partner.reliability_percent}% · ${item.recommended_partner.shoulder_km} км` : ''}
+        </div>
+      ` : ''}
+      <div class="muted">Ожидаемая маржа: ${item.expected_margin_percent ?? '—'}% · Плечо: ${item.mobilization_distance_km ?? '—'} км</div>
+      <div class="badge-row">
+        ${item.state_codes.map((stateCode) => `<span class="badge badge-low">${stateCode}</span>`).join('')}
+      </div>
+    </article>
+  `).join('');
+
+  document.querySelectorAll('#logisticsList .queue-item').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.cardIdInput.value = node.dataset.opportunityId;
+      loadCard(node.dataset.opportunityId);
+    });
+  });
+}
+
+function renderOwnerDashboard(payload) {
+  const summary = payload.summary ?? {};
+  const items = payload.items ?? [];
+
+  els.ownerSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Own Fleet Share</span>
+      <strong>${summary.own_equipment_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Subrent Dependency</span>
+      <strong>${summary.subrent_dependency_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Debt Exposure</span>
+      <strong>${summary.debt_exposure_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Reserve Coverage</span>
+      <strong>${summary.reserve_coverage_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Partner Coverage</span>
+      <strong>${summary.partner_coverage_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Confidence Guard</span>
+      <strong>${summary.confidence_guard_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Margin Risk</span>
+      <strong>${summary.margin_risk_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Load Ready</span>
+      <strong>${summary.strategic_load_ready_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Live Support</span>
+      <strong>${summary.live_support_share ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Avg Margin</span>
+      <strong>${summary.average_margin_percent ?? '—'}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accepted</span>
+      <strong>${summary.recommendation_accepted_rate ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Executed</span>
+      <strong>${summary.recommendation_executed_rate ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Failed</span>
+      <strong>${summary.ingest_failed_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Suspicious</span>
+      <strong>${summary.ingest_suspicious_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Unresolved</span>
+      <strong>${summary.ingest_unresolved_events ?? 0}</strong>
+    </div>
+  `;
+
+  if (!items.length) {
+    els.ownerList.innerHTML = '<div class="empty">Стратегических отклонений сейчас нет.</div>';
+    return;
+  }
+
+  els.ownerList.innerHTML = items.map((item) => `
+    <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+          <div class="queue-subtitle">${item.object ?? 'Объект не определён'}</div>
+        </div>
+        <span class="badge badge-high">${item.strategy_flag} · ${item.priority_score}</span>
+      </div>
+      <div class="queue-meta">
+        <span class="pill">Маржа: ${item.margin_percent ?? '—'}%</span>
+        <span class="pill">Действие: ${item.recommended_action ?? '—'}</span>
+        <span class="pill">Pressure: ${item.margin_pressure ?? '—'}</span>
+      </div>
+      <div class="muted">${item.owner_signal ?? '—'}</div>
+      ${(item.reserve_unit || item.recommended_partner) ? `<div class="muted">Резерв: ${item.reserve_unit ?? '—'} · Партнер: ${item.recommended_partner ?? '—'}</div>` : ''}
+      <div class="badge-row">
+        <span class="badge badge-low">own: ${item.own_equipment_available ?? '—'}</span>
+        <span class="badge badge-low">subrent: ${item.subrent_required ?? '—'}</span>
+        <span class="badge badge-low">debt: ${item.debt_risk ? 'yes' : 'no'}</span>
+        ${(item.signal_markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('')}
+      </div>
+    </article>
+  `).join('');
+
+  document.querySelectorAll('#ownerList .queue-item').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.cardIdInput.value = node.dataset.opportunityId;
+      loadCard(node.dataset.opportunityId);
+    });
+  });
+}
+
+function renderSystemStatus(payload) {
+  const postgres = payload.postgres ?? {};
+  const qdrant = payload.qdrant ?? {};
+  const neo4j = payload.neo4j ?? {};
+  const ingest = payload.ingest ?? {};
+  const app = payload.app ?? {};
+  const readiness = payload.readiness ?? {};
+  const warnings = payload.warnings ?? [];
+  const operationalChecklist = payload.operational_checklist ?? [];
+  const overallState = payload.overall_state ?? 'unknown';
+  const qdrantCollections = qdrant.collections ?? [];
+  const qdrantCollectionsLabel = qdrantCollections.length
+    ? qdrantCollections.map((item) => `${item.key}:${item.exists ? item.points_count ?? 0 : 'off'}`).join(', ')
+    : '—';
+
+  els.systemStatusSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Overall</span>
+      <strong>${overallState}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Readiness</span>
+      <strong>${readiness.level ?? readiness.state ?? 'unknown'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Liveness</span>
+      <strong>${app.live_state ?? 'unknown'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Postgres</span>
+      <strong>${postgres.reachable ? 'online' : postgres.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Qdrant</span>
+      <strong>${qdrant.reachable ? 'online' : qdrant.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Neo4j</span>
+      <strong>${neo4j.reachable ? 'online' : neo4j.configured ? 'configured' : 'off'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Qdrant Collections</span>
+      <strong>${qdrantCollectionsLabel}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Neo4j Graph</span>
+      <strong>${neo4j.nodes_count ?? 0}n / ${neo4j.edges_count ?? 0}e</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Pending Ingest</span>
+      <strong>${ingest.pending_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Failed Ingest</span>
+      <strong>${ingest.failed_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Suspicious Ingest</span>
+      <strong>${ingest.suspicious_count ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Ingest Freshness</span>
+      <strong>${ingest.freshness_state ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Ingest</span>
+      <strong>${formatDateTime(ingest.latest_ingest_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Processed Age</span>
+      <strong>${ingest.latest_processed_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Ingest Issue</span>
+      <strong>${formatDateTime(ingest.latest_issue_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Issue Age</span>
+      <strong>${ingest.latest_issue_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Recommendation</span>
+      <strong>${formatDateTime(app.latest_recommendation_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Recommendation Age</span>
+      <strong>${app.latest_recommendation_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Last Audit</span>
+      <strong>${formatDateTime(app.latest_audit_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Audit Age</span>
+      <strong>${app.latest_audit_age_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Started</span>
+      <strong>${formatDateTime(app.started_at)}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Version</span>
+      <strong>${app.app_version ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Git SHA</span>
+      <strong>${app.git_sha ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Service</span>
+      <strong>${app.service ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">HTTP</span>
+      <strong>${app.http_reachable ? `online (${app.http_status_code ?? 200})` : 'down'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">HTTP Latency</span>
+      <strong>${app.http_latency_ms ?? '—'} ms</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Uptime</span>
+      <strong>${app.uptime_min ?? '—'} min</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Env</span>
+      <strong>${app.environment ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Warnings</span>
+      <strong>${warnings.length ? warnings.join(', ') : 'none'}</strong>
+    </div>
+  `;
+
+  if ((readiness.operational_gaps ?? []).length) {
+    els.systemStatusSummary.innerHTML += `
+      <div class="stat-card">
+        <span class="stat-label">Op Gaps</span>
+        <strong>${readiness.operational_gaps.join(', ')}</strong>
+      </div>
+    `;
+  }
+
+  if (operationalChecklist.length) {
+    els.systemStatusSummary.innerHTML += operationalChecklist.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.code}</span>
+        <strong>${item.status}</strong>
+        <div class="muted">${item.detail ?? '—'}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function renderQualityDashboard(payload) {
+  const summary = payload.summary ?? {};
+  const criticalFields = summary.critical_fields ?? [];
+  const thresholdChecks = summary.threshold_checks ?? [];
+  const issueBreakdown = summary.issue_breakdown ?? [];
+  els.qualitySummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Opportunities</span>
+      <strong>${summary.total_opportunities ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Linked Events</span>
+      <strong>${summary.linked_events_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Normalized Objects</span>
+      <strong>${summary.normalized_objects_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Opp Unit Linked</span>
+      <strong>${summary.linked_opportunity_unit_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Competitor Confidence</span>
+      <strong>${summary.competitor_confidence_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Execution Log</span>
+      <strong>${summary.execution_log_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Client Intent</span>
+      <strong>${summary.client_intent_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Price Context</span>
+      <strong>${summary.price_context_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Logistics Context</span>
+      <strong>${summary.logistics_context_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Geo Hint</span>
+      <strong>${summary.geo_hint_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Payment Readiness</span>
+      <strong>${summary.payment_readiness_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Decision Access</span>
+      <strong>${summary.decision_access_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Next Step Signal</span>
+      <strong>${summary.next_step_signal_percent ?? 0}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">No Next Step</span>
+      <strong>${summary.opportunities_without_next_step ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Missing Equipment</span>
+      <strong>${summary.opportunities_missing_equipment ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Failed Ingest</span>
+      <strong>${summary.failed_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Suspicious Match</span>
+      <strong>${summary.suspicious_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Unresolved Events</span>
+      <strong>${summary.unresolved_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Alias-Assisted</span>
+      <strong>${summary.alias_assisted_ingest_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Opportunities At Risk</span>
+      <strong>${summary.opportunities_with_ingest_risk ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Confidence Guard</span>
+      <strong>${summary.confidence_guard_events ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Normalization Records</span>
+      <strong>${summary.normalization_records ?? 0}</strong>
+    </div>
+    ${criticalFields.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.label}</span>
+        <strong>${item.filled_percent}%</strong>
+      </div>
+    `).join('')}
+  `;
+
+  const items = payload.items ?? [];
+  const criticalFieldsHtml = criticalFields.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Критичные поля Opportunity Unit</h3>
+            <div class="queue-subtitle">Покрытие обязательных полей из ТЗ</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${criticalFields.map((item) => `<span class="badge badge-${item.status === 'ok' ? 'low' : item.status === 'warning' ? 'high' : 'critical'}">${item.label}: ${item.filled_percent}%</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
+  const thresholdChecksHtml = thresholdChecks.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Threshold Checks</h3>
+            <div class="queue-subtitle">Контроль целевых метрик качества данных по ТЗ</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${thresholdChecks.map((item) => `<span class="badge badge-${item.status === 'ok' ? 'low' : item.status === 'warning' ? 'high' : 'critical'}">${item.code}: ${item.actual_percent}% / ${item.target_percent}%</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
+  const issueBreakdownHtml = issueBreakdown.length
+    ? `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">Топ проблем качества</h3>
+            <div class="queue-subtitle">Какие issue чаще всего бьют по opportunity</div>
+          </div>
+        </div>
+        <div class="badge-row">
+          ${issueBreakdown.slice(0, 10).map((item) => `<span class="badge badge-critical">${item.issue_code}: ${item.count}</span>`).join('')}
+        </div>
+      </article>
+    `
+    : '';
+
+  if (!items.length) {
+    els.qualityList.innerHTML = `${criticalFieldsHtml}${thresholdChecksHtml}${issueBreakdownHtml}<div class="empty">Критичных проблем качества данных сейчас нет.</div>`;
+    return;
+  }
+
+  els.qualityList.innerHTML = criticalFieldsHtml + thresholdChecksHtml + issueBreakdownHtml + items.slice(0, 8).map((item) => `
+    <article class="queue-item" data-opportunity-id="${item.opportunity_id}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+          <div class="queue-subtitle">${item.object ?? 'Объект не определён'}</div>
+        </div>
+        <span class="badge badge-low">quality ${item.quality_score}</span>
+      </div>
+      <div class="badge-row">
+        ${item.issues.map((issue) => `<span class="badge badge-low">${issue}</span>`).join('')}
+        ${(item.extraction_confidence?.low_confidence_fields ?? []).map((field) => `<span class="badge badge-critical">${field} low confidence</span>`).join('')}
+      </div>
+      ${(item.ingest_issues?.length ?? 0) > 0 ? `<div class="muted">Ingest risk: ${item.ingest_issues.join(', ')}</div>` : ''}
+    </article>
+  `).join('');
+
+  document.querySelectorAll('#qualityList .queue-item').forEach((node) => {
+    node.addEventListener('click', () => {
+      els.cardIdInput.value = node.dataset.opportunityId;
+      loadCard(node.dataset.opportunityId);
+    });
+  });
+}
+
+function renderNormalizationDashboard(payload) {
+  const summary = payload.summary ?? {};
+  const priorityBreakdown = summary.priority_breakdown ?? [];
+  const decisionBreakdown = summary.decision_breakdown ?? [];
+  els.normalizationSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Companies</span>
+      <strong>${summary.companies_seen ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Objects</span>
+      <strong>${summary.objects_seen ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Persons</span>
+      <strong>${summary.persons_seen ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Candidates</span>
+      <strong>${summary.duplicate_candidates ?? 0}</strong>
+    </div>
+    ${priorityBreakdown.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.priority_code}</span>
+        <strong>${item.count}</strong>
+      </div>
+    `).join('')}
+    ${decisionBreakdown.map((item) => `
+      <div class="stat-card">
+        <span class="stat-label">${item.decision_status}</span>
+        <strong>${item.count}</strong>
+      </div>
+    `).join('')}
+  `;
+
+  const items = payload.items ?? [];
+  if (!items.length) {
+    els.normalizationList.innerHTML = '<div class="empty">Явных кандидатов на дубли сейчас не найдено.</div>';
+    return;
+  }
+
+  els.normalizationList.innerHTML = items.slice(0, 10).map((item) => `
+    <article class="queue-item" data-candidate-key="${item.candidate_key}">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.left_label}</h3>
+          <div class="queue-subtitle">${item.right_label}</div>
+        </div>
+        <span class="badge badge-high">${item.entity_kind} · ${item.similarity_score}</span>
+      </div>
+      <div class="muted">suggested id: ${item.suggested_resolved_entity_id ?? '—'}</div>
+      <div class="muted">action: ${item.suggested_action ?? '—'}</div>
+      <div class="badge-row">
+        <span class="badge badge-${item.merge_priority === 'merge_now' ? 'critical' : item.merge_priority === 'review_fast' ? 'high' : 'low'}">${item.merge_priority ?? 'review'}</span>
+        ${(item.match_reasons ?? []).map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}
+      </div>
+      <div class="action-row" style="margin-top: 10px;">
+        <button class="button button-success" data-normalization-action="accepted">Accept merge</button>
+        <button class="button button-secondary" data-normalization-action="review_later">Review later</button>
+        <button class="button button-danger" data-normalization-action="ignored">Ignore</button>
+      </div>
+    </article>
+  `).join('');
+
+  document.querySelectorAll('#normalizationList [data-normalization-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const candidateKey = button.closest('[data-candidate-key]')?.dataset.candidateKey;
+      if (!candidateKey) return;
+      await api('/normalization/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_key: candidateKey,
+          decision_status: button.dataset.normalizationAction,
+        }),
+      });
+      await loadNormalizationDashboard();
+    });
+  });
+}
+
+function renderFeedbackLearningDashboard(payload) {
+  const summary = payload.summary ?? {};
+  const learningInsights = payload.learning_insights ?? [];
+  els.feedbackLearningSummary.innerHTML = `
+    <div class="stat-card">
+      <span class="stat-label">Feedback</span>
+      <strong>${summary.total_feedback ?? 0}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Accepted</span>
+      <strong>${Math.round((summary.accepted_rate ?? 0) * 100)}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Executed</span>
+      <strong>${Math.round((summary.executed_rate ?? 0) * 100)}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Rejected</span>
+      <strong>${Math.round((summary.rejected_rate ?? 0) * 100)}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Coverage</span>
+      <strong>${Math.round((summary.recommendation_coverage ?? 0) * 100)}%</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Learning</span>
+      <strong>${summary.learning_readiness ?? 'cold'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Promote</span>
+      <strong>${summary.top_promote_action ?? '—'}</strong>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Suppress</span>
+      <strong>${summary.top_suppress_action ?? '—'}</strong>
+    </div>
+  `;
+
+  const actionItems = payload.action_metrics ?? [];
+  els.feedbackLearningList.innerHTML = actionItems.length
+    ? actionItems.map((item) => `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">${item.action_code ?? 'unknown'}</h3>
+            <div class="queue-subtitle">feedback: ${item.total}</div>
+          </div>
+          <span class="badge badge-high">${Math.round((item.executed_rate ?? 0) * 100)}% executed</span>
+        </div>
+        <div class="badge-row">
+          <span class="badge badge-low">accepted ${Math.round((item.accepted_rate ?? 0) * 100)}%</span>
+          <span class="badge badge-low">executed ${Math.round((item.executed_rate ?? 0) * 100)}%</span>
+          <span class="badge badge-low">rejected ${Math.round((item.rejected_rate ?? 0) * 100)}%</span>
+          <span class="badge badge-${item.learning_state === 'promote' ? 'low' : item.learning_state === 'suppress' ? 'critical' : 'high'}">${item.learning_state}</span>
+          <span class="badge badge-low">score ${item.learning_score}</span>
+        </div>
+        <div class="muted">${item.guidance ?? '—'}</div>
+      </article>
+    `).join('')
+    : '<div class="empty">По рекомендациям пока мало данных для обучения.</div>';
+
+  if (learningInsights.length) {
+    els.feedbackLearningList.innerHTML += learningInsights.map((item) => `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">${item.action_code ?? 'unknown'}</h3>
+            <div class="queue-subtitle">learning insight</div>
+          </div>
+          <span class="badge badge-${item.learning_state === 'promote' ? 'low' : item.learning_state === 'suppress' ? 'critical' : 'high'}">${item.learning_state}</span>
+        </div>
+        <div class="muted">${item.guidance ?? '—'}</div>
+      </article>
+    `).join('');
+  }
+
+  const recentItems = payload.recent_feedback ?? [];
+  els.feedbackRecentList.innerHTML = recentItems.length
+    ? recentItems.map((item) => `
+      <article class="queue-item">
+        <div class="queue-top">
+          <div>
+            <h3 class="queue-title">${item.company ?? 'Без компании'}</h3>
+            <div class="queue-subtitle">${item.action_code ?? 'unknown'} · ${item.status}</div>
+          </div>
+          <span class="badge badge-low">${formatDateTime(item.recorded_at)}</span>
+        </div>
+      </article>
+    `).join('')
+    : '<div class="empty">Последних feedback-событий пока нет.</div>';
+}
+
+function renderAuditLogs(items) {
+  if (!items.length) {
+    els.auditList.innerHTML = '<div class="empty">Журнал пока пуст.</div>';
+    return;
+  }
+
+  els.auditList.innerHTML = items.map((item) => `
+    <article class="queue-item">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${item.action_code}</h3>
+          <div class="queue-subtitle">${item.actor_name ?? item.actor_external_id ?? 'unknown'} · ${item.actor_role ?? '—'}</div>
+        </div>
+        <span class="badge badge-low">${formatDateTime(item.created_at)}</span>
+      </div>
+      <div class="muted">${item.resource_type}${item.resource_id ? ` / ${item.resource_id}` : ''} · ${item.outcome_code}</div>
+    </article>
+  `).join('');
+}
+
+function renderDictionaries(payload) {
+  const actionLibrary = payload.action_library ?? [];
+  const summaryItems = [
+    ['Action Library', actionLibrary.length],
+    ['Equipment Types', (payload.equipment_types ?? []).length],
+    ['Equipment Models', (payload.equipment_models ?? []).length],
+    ['Own Units', (payload.own_equipment_units ?? []).length],
+    ['Partners', (payload.subrent_partners ?? []).length],
+    ['Competitors', (payload.competitors ?? []).length],
+    ['Object Types', (payload.object_types ?? []).length],
+    ['Stop Signals', (payload.stop_signals ?? []).length],
+  ];
+
+  els.dictionarySummary.innerHTML = summaryItems.map(([label, value]) => `
+    <div class="stat-card">
+      <span class="stat-label">${label}</span>
+      <strong>${value}</strong>
+    </div>
+  `).join('');
+
+  const sections = [
+    ['Action Library', actionLibrary.map((item) => `${item.action_code} -> ${item.target_role}`)],
+    ['Equipment Types', payload.equipment_types ?? []],
+    ['Subrent Partners', (payload.subrent_partners ?? []).map((item) => `${item.name} (${item.region}, rel ${Math.round((item.reliability ?? 0) * 100)}%)`)],
+    ['Competitors', (payload.competitors ?? []).map((item) => `${item.name} (${Math.round((item.confidence_level ?? 0) * 100)}%)`)],
+    ['Maturity Markers', payload.maturity_markers ?? []],
+    ['Stop Signals', payload.stop_signals ?? []],
+  ];
+
+  els.dictionaryList.innerHTML = sections.map(([title, items]) => `
+    <article class="queue-item">
+      <div class="queue-top">
+        <div>
+          <h3 class="queue-title">${title}</h3>
+          <div class="queue-subtitle">Reference data for DSS logic</div>
+        </div>
+      </div>
+      <div class="badge-row">
+        ${(items ?? []).slice(0, 12).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">empty</span>'}
+      </div>
+    </article>
+  `).join('');
+}
+
+function renderDetailRows(details) {
+  return Object.entries(details).map(([label, value]) => `
+    <div class="detail-row">
+      <dt>${label}</dt>
+      <dd>${value ?? '—'}</dd>
+    </div>
+  `).join('');
+}
+
+function renderGraphBlock(graph) {
+  if (!graph || !graph.nodes?.length) {
+    return '<div class="empty">Граф связей пока пуст.</div>';
+  }
+
+  return `
+    <div class="graph-board">
+      <div class="badge-row" style="margin-bottom: 10px;">
+        <span class="badge badge-low">source: ${graph.source ?? 'unknown'}</span>
+        <span class="badge badge-low">nodes: ${graph.summary?.nodes_count ?? graph.nodes?.length ?? 0}</span>
+        <span class="badge badge-low">edges: ${graph.summary?.edges_count ?? graph.edges?.length ?? 0}</span>
+      </div>
+      <div class="graph-nodes">
+        ${graph.nodes.map((node) => `
+          <div class="graph-node">
+            <span class="graph-node-type">${node.type}</span>
+            <strong>${node.label}</strong>
+          </div>
+        `).join('')}
+      </div>
+      <div class="graph-edges">
+        ${graph.edges.map((edge) => `
+          <div class="graph-edge">${edge.source} -> ${edge.type} -> ${edge.target}</div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCommunicationHistory(items) {
+  if (!items?.length) {
+    return '<div class="empty">Коммуникаций по сделке пока нет.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => `
+        <div class="history-item">
+          <strong>${item.summary ?? item.type ?? 'Событие'}</strong>
+          <div class="muted">${item.channel ?? 'channel?'} · ${item.author_name ?? 'без автора'} · ${formatDateTime(item.datetime)}</div>
+          <div>${item.text ?? '—'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderEvidenceList(items, formatter) {
+  if (!items?.length) {
+    return '<div class="empty">Нет подтверждающих событий.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => `
+        <div class="history-item">
+          ${formatter(item)}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderRiskEvidence(evidence) {
+  if (!evidence) {
+    return '<div class="empty">Evidence пока не собрано.</div>';
+  }
+
+  const flags = evidence.flags ?? {};
+  const counters = evidence.counters ?? {};
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Flags</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">competitor: ${flags.competitor_present ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">debt: ${flags.debt_risk ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">subrent: ${flags.subrent_required ? 'yes' : 'no'}</span>
+          <span class="badge badge-low">promise overdue: ${flags.manager_promise_overdue ? 'yes' : 'no'}</span>
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Counters</strong>
+        <div class="badge-row">
+          ${Object.entries(counters).map(([key, value]) => `<span class="badge badge-low">${key}: ${value}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card-grid compact-grid">
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Competitor</h3>
+        ${renderEvidenceList(evidence.evidence?.competitor, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>markers: ${(item.markers ?? []).join(', ') || '—'}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Debt Risk</h3>
+        ${renderEvidenceList(evidence.evidence?.debt_risk, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>markers: ${(item.markers ?? []).join(', ') || '—'}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Subrent</h3>
+        ${renderEvidenceList(evidence.evidence?.subrent, (item) => `
+          <strong>${item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+        `)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Evidence</p>
+        <h3>Manager Promises</h3>
+        ${renderEvidenceList(evidence.evidence?.manager_promises, (item) => `
+          <strong>${item.promise ?? item.summary ?? '—'}</strong>
+          <div class="muted">${item.channel ?? '—'} · ${formatDateTime(item.datetime)}</div>
+          <div>due: ${formatDateTime(item.due_at)} · action: ${item.action_code ?? '—'}</div>
+        `)}
+      </section>
+    </div>
+  `;
+}
+
+function renderExtractionQuality(quality) {
+  if (!quality) {
+    return '<div class="empty">Качество extraction пока не рассчитано.</div>';
+  }
+
+  const confidenceEntries = Object.entries(quality.field_confidence ?? {})
+    .filter(([, value]) => value !== null && value !== undefined);
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Extraction Coverage</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">events: ${quality.extracted_events ?? 0}</span>
+          ${(quality.low_confidence_fields ?? []).map((item) => `<span class="badge badge-critical">${item} low confidence</span>`).join('') || '<span class="badge badge-medium">no low-confidence fields</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Field Confidence</strong>
+        <div class="badge-row">
+          ${confidenceEntries.map(([key, value]) => `<span class="badge badge-low">${key}: ${Math.round(value * 100)}%</span>`).join('') || '<span class="badge badge-low">no confidence data</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEnrichedContext(context) {
+  if (!context) {
+    return '<div class="empty">Дополнительный контекст пока не собран.</div>';
+  }
+
+  const readinessEntries = Object.entries(context.readiness_signals ?? {});
+
+  return `
+    <div class="history-list">
+      <div class="history-item">
+        <strong>Equipment / Geo</strong>
+        <div class="badge-row">
+          <span class="badge badge-low">model: ${context.equipment_model ?? '—'}</span>
+          <span class="badge badge-low">geo: ${context.geo_hint?.normalized_value ?? context.geo_hint?.raw_value ?? '—'}</span>
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Client Expectation</strong>
+        <div>${context.client_expected_next_step ?? '—'}</div>
+      </div>
+      <div class="history-item">
+        <strong>Price Context</strong>
+        <div>${context.price_context?.raw_value ?? '—'}</div>
+        <div class="badge-row">
+          ${(context.price_context?.markers ?? []).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">no price markers</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Work Conditions</strong>
+        <div class="badge-row">
+          ${(context.work_conditions ?? []).map((item) => `<span class="badge badge-low">${item}</span>`).join('') || '<span class="badge badge-low">no work conditions</span>'}
+        </div>
+      </div>
+      <div class="history-item">
+        <strong>Readiness Signals</strong>
+        <div class="badge-row">
+          ${readinessEntries.map(([key, value]) => `<span class="badge ${value ? 'badge-high' : 'badge-low'}">${key}: ${value ? 'yes' : 'no'}</span>`).join('') || '<span class="badge badge-low">no readiness signals</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDecisionTimeline(items) {
+  if (!items?.length) {
+    return '<div class="empty">Timeline решений пока пуст.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => `
+        <div class="history-item">
+          <strong>${item.title ?? item.event_type}</strong>
+          <div class="muted">${item.event_type} · ${formatDateTime(item.created_at)}</div>
+          <div>${item.subtitle ?? '—'}</div>
+          ${item.event_type === 'feedback' ? `
+            <div class="badge-row">
+              ${item.payload?.effect_after_1_day ? `<span class="badge badge-low">1d</span>` : ''}
+              ${item.payload?.effect_after_3_days ? `<span class="badge badge-low">3d</span>` : ''}
+              ${item.payload?.effect_after_7_days ? `<span class="badge badge-low">7d</span>` : ''}
+              ${item.payload?.effect_after_30_days ? `<span class="badge badge-low">30d</span>` : ''}
+            </div>
+            <div class="muted">
+              ${item.payload?.effect_after_1_day ?? item.payload?.effect_after_3_days ?? item.payload?.effect_after_7_days ?? item.payload?.effect_after_30_days ?? item.payload?.deal_result ?? ''}
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderStopSignals(stopSignals) {
+  if (!stopSignals) {
+    return '<div class="empty">Стоп-сигналы пока не рассчитаны.</div>';
+  }
+
+  const renderList = (items, emptyLabel) => (
+    items?.length
+      ? `<div class="history-list">${items.map((item) => `<div class="history-item">${item}</div>`).join('')}</div>`
+      : `<div class="empty">${emptyLabel}</div>`
+  );
+
+  return `
+    <div class="card-grid compact-grid">
+      <section class="card-section">
+        <p class="panel-kicker">Why Not Now</p>
+        <h3>Блокирующие причины</h3>
+        ${renderList(stopSignals.blocked_reasons, 'Явных блокеров сейчас нет.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Why Not Now</p>
+        <h3>Почему приоритет ниже</h3>
+        ${renderList(stopSignals.low_priority_reasons, 'Сделка не выглядит искусственно заниженной.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Stop Signals</p>
+        <h3>Стратегические предупреждения</h3>
+        ${renderList(stopSignals.strategy_warnings, 'Стратегических стоп-сигналов пока нет.')}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Before Attack</p>
+        <h3>Что нужно сделать до дожима</h3>
+        ${renderList(stopSignals.wait_conditions, 'Сделку можно атаковать без дополнительных стоп-условий.')}
+      </section>
+    </div>
+  `;
+}
+
+function renderFeedbackHistory(items) {
+  if (!items?.length) {
+    return '<div class="empty">Feedback по рекомендации пока нет.</div>';
+  }
+
+  return `
+    <div class="history-list">
+      ${items.map((item) => {
+        let status = 'shown';
+        if (item.executed) status = 'executed';
+        else if (item.accepted) status = 'accepted';
+        else if (item.rejected) status = 'rejected';
+
+        return `
+          <div class="history-item">
+            <strong>${item.action_code ?? 'recommendation'} · ${status}</strong>
+            <div class="muted">${formatDateTime(item.recorded_at)}</div>
+            <div>${item.rejection_reason ?? item.deal_result ?? '—'}</div>
+            <div class="badge-row">
+              ${item.effect_after_1_day ? '<span class="badge badge-low">1d</span>' : ''}
+              ${item.effect_after_3_days ? '<span class="badge badge-low">3d</span>' : ''}
+              ${item.effect_after_7_days ? '<span class="badge badge-low">7d</span>' : ''}
+              ${item.effect_after_30_days ? '<span class="badge badge-low">30d</span>' : ''}
+            </div>
+            <div class="muted">
+              ${item.effect_after_1_day ?? item.effect_after_3_days ?? item.effect_after_7_days ?? item.effect_after_30_days ?? ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function getFeedbackFormValues() {
+  return {
+    deal_result: document.querySelector('#feedbackDealResult')?.value?.trim() || null,
+    effect_after_1_day: document.querySelector('#feedback1d')?.value?.trim() || null,
+    effect_after_3_days: document.querySelector('#feedback3d')?.value?.trim() || null,
+    effect_after_7_days: document.querySelector('#feedback7d')?.value?.trim() || null,
+    effect_after_30_days: document.querySelector('#feedback30d')?.value?.trim() || null,
+  };
+}
+
+function renderCard(card) {
+  if (!card) {
+    els.cardView.innerHTML = '<div class="empty">Сделка не найдена.</div>';
+    return;
+  }
+
+  els.cardView.innerHTML = `
+    <div class="card-grid">
+      <section class="card-section">
+        <p class="panel-kicker">Summary</p>
+        <h3>${card.summary.company ?? 'Без компании'}</h3>
+        <dl class="detail-list">
+          ${renderDetailRows({
+            Контакт: card.summary.contact,
+            Менеджер: card.summary.owner_manager,
+            Объект: card.summary.object,
+            Техника: card.summary.equipment_type,
+            'Модель техники': card.enriched_context?.equipment_model ?? '—',
+            Стадия: card.summary.commercial_stage,
+            'Последнее касание': formatDateTime(card.summary.last_touch_at),
+          })}
+        </dl>
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Decision</p>
+        <h3>${card.recommendation.action_name ?? 'Рекомендации нет'}</h3>
+        <dl class="detail-list">
+          ${renderDetailRows({
+            Приоритет: card.priority_score,
+            Статус: card.recommendation.recommendation_status,
+            Роль: card.recommendation.target_role,
+            Дедлайн: formatDateTime(card.recommendation.deadline_at),
+            Эскалация: card.recommendation.escalation_action_code,
+            'Accept rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—',
+            'Exec rate': card.recommendation.action_effectiveness ? `${Math.round((card.recommendation.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—',
+            Support: card.decision_support?.support_level ?? 'minimal',
+            Guard: card.decision_support?.confidence_guard ? 'confidence guard active' : '—',
+            'Client next step': card.enriched_context?.client_expected_next_step ?? '—',
+          })}
+        </dl>
+        <div class="badge-row">
+          ${(card.recommendation_signals?.markers ?? []).map((marker) => `<span class="badge badge-high">${marker}</span>`).join('') || '<span class="badge badge-low">no advanced signals</span>'}
+          ${card.decision_support?.confidence_guard ? '<span class="badge badge-low">confidence guard</span>' : ''}
+          ${(card.decision_support?.support_markers ?? []).map((marker) => `<span class="badge badge-low">${marker}</span>`).join('')}
+        </div>
+        <div class="action-row">
+          <button class="button button-success" data-feedback="accepted">Принять</button>
+          <button class="button button-danger" data-feedback="rejected">Отклонить</button>
+          <button class="button button-secondary" data-feedback="executed">Выполнено</button>
+        </div>
+        <div class="status-line">
+          Recommendation ID: ${card.recommendation.recommendation_id ?? '—'}
+        </div>
+        <div class="history-list" style="margin-top: 12px;">
+          <div class="history-item">
+            <strong>Feedback Form</strong>
+            <div class="queue-search" style="margin-top: 10px;">
+              <input id="feedbackDealResult" type="text" placeholder="Итог по сделке / комментарий" />
+              <input id="feedback1d" type="text" placeholder="Effect after 1 day" />
+              <input id="feedback3d" type="text" placeholder="Effect after 3 days" />
+              <input id="feedback7d" type="text" placeholder="Effect after 7 days" />
+              <input id="feedback30d" type="text" placeholder="Effect after 30 days" />
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Explainability</p>
+        <h3>Почему сейчас</h3>
+        <div class="history-list">
+          ${(card.recommendation.explainability?.why_important ?? []).map((item) => `<div class="history-item">${item}</div>`).join('') || '<div class="empty">Пока без explainability.</div>'}
+        </div>
+        <div class="history-list" style="margin-top: 12px;">
+          <div class="history-item">
+            <strong>Почему именно это действие</strong>
+            <div class="muted">${card.recommendation.explainability?.why_this_action ?? '—'}</div>
+          </div>
+          <div class="history-item">
+            <strong>Learning Hint</strong>
+            <div class="muted">${card.recommendation.explainability?.learning_hint ?? '—'}</div>
+          </div>
+          ${(card.recommendation.explainability?.considered_alternatives ?? []).map((item) => `
+            <div class="history-item">
+              <strong>${item.action_name ?? item.action_code}</strong>
+              <div class="muted">${item.state_code} · score ${item.selection_score}</div>
+              <div class="muted">accept ${item.action_effectiveness ? `${Math.round((item.action_effectiveness.accepted_rate ?? 0) * 100)}%` : '—'} · exec ${item.action_effectiveness ? `${Math.round((item.action_effectiveness.executed_rate ?? 0) * 100)}%` : '—'}</div>
+              <div class="muted">${item.why_not_selected}</div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Risk / Evidence</p>
+        <h3>Сигналы и подтверждения</h3>
+        ${renderRiskEvidence(card.risk_evidence)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Extraction Quality</p>
+        <h3>Насколько уверенно система поняла коммуникации</h3>
+        ${renderExtractionQuality(card.extraction_quality)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Enriched Context</p>
+        <h3>Что еще система вытащила из коммуникаций</h3>
+        ${renderEnrichedContext(card.enriched_context)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Why Not Now / Stop Signals</p>
+        <h3>Почему не всегда нужно атаковать прямо сейчас</h3>
+        ${renderStopSignals(card.stop_signals)}
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">Score Vector</p>
+        <h3>Индексы</h3>
+        <div class="score-row">
+          ${Object.entries(card.score_vector).map(([key, value]) => `<span class="score-pill">${key}: ${value}</span>`).join('')}
+        </div>
+      </section>
+      <section class="card-section">
+        <p class="panel-kicker">State History</p>
+        <h3>Состояния</h3>
+        <div class="history-list">
+          ${(card.state_history ?? []).slice(0, 6).map((item) => `
+            <div class="history-item">
+              <strong>${item.state_code}</strong><br />
+              <span class="muted">${item.reason ?? ''}</span>
+            </div>
+          `).join('') || '<div class="empty">История пока пуста.</div>'}
+        </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Recommendations History</p>
+        <h3>История рекомендаций</h3>
+        <div class="history-list">
+          ${(card.recommendations_history ?? []).map((item) => `
+            <div class="history-item">
+              <strong>${item.action_code ?? '—'}</strong>
+              <div class="muted">status: ${item.status ?? '—'} · deadline: ${formatDateTime(item.deadline_at)}</div>
+            </div>
+          `).join('') || '<div class="empty">История рекомендаций пока пуста.</div>'}
+        </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Decision Timeline</p>
+        <h3>Хронология решений и feedback</h3>
+        ${renderDecisionTimeline(card.decision_timeline)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Feedback History</p>
+        <h3>Эффект рекомендаций</h3>
+        ${renderFeedbackHistory(card.feedback_history)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Communication History</p>
+        <h3>История касаний</h3>
+        ${renderCommunicationHistory(card.communication_history)}
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Similar Cases</p>
+        <h3>Похожие кейсы</h3>
+        <div class="badge-row" style="margin-bottom: 10px;">
+          <span class="badge badge-low">total ${card.similar_cases_summary?.total ?? 0}</span>
+          <span class="badge ${card.similar_cases_summary?.vector_live ? 'badge-high' : 'badge-low'}">
+            ${card.similar_cases_summary?.vector_live ? 'vector live' : 'fallback mode'}
+          </span>
+          ${card.similar_cases_summary?.primary_source ? `<span class="badge badge-low">primary ${card.similar_cases_summary.primary_source}</span>` : ''}
+          ${(card.similar_cases_summary?.sources ?? []).map((source) => `<span class="badge badge-low">${source}</span>`).join('')}
+        </div>
+        <div class="history-list">
+          ${(card.similar_cases ?? []).map((item) => `
+            <div class="history-item">
+              <strong>${item.title ?? 'Без названия'}</strong>
+              <div class="muted">outcome: ${item.outcome ?? '—'} · source: ${item.source ?? 'unknown'} · mode: ${item.source_mode ?? 'unknown'} · score: ${item.score ?? '—'}</div>
+              <div>${item.hint ?? '—'}</div>
+              ${(item.match_reasons ?? []).length ? `<div class="badge-row">${item.match_reasons.map((reason) => `<span class="badge badge-low">${reason}</span>`).join('')}</div>` : ''}
+            </div>
+          `).join('') || '<div class="empty">Похожие кейсы пока не найдены.</div>'}
+        </div>
+      </section>
+      <section class="card-section full">
+        <p class="panel-kicker">Graph View</p>
+        <h3>Связи по сделке</h3>
+        ${renderGraphBlock(card.graph)}
+      </section>
+    </div>
+  `;
+
+  document.querySelectorAll('[data-feedback]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const recommendationId = card.recommendation.recommendation_id;
+      if (!recommendationId) return;
+
+      const mode = button.dataset.feedback;
+      const payload = {
+        shown: true,
+        accepted: mode === 'accepted',
+        rejected: mode === 'rejected',
+        executed: mode === 'executed',
+        rejection_reason: mode === 'rejected' ? 'Отклонено из UI manager card' : null,
+        result_after_days: mode === 'executed' ? 'Отмечено как выполненное из UI' : null,
+        ...getFeedbackFormValues(),
+      };
+
+      await api(`/actions/${encodeURIComponent(recommendationId)}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      await loadCard(uiState.currentCardId);
+    });
+  });
+}
+
+function renderSimpleList(element, items, formatter) {
+  if (!items.length) {
+    element.innerHTML = '<div class="empty">Пусто.</div>';
+    return;
+  }
+
+  element.innerHTML = items.map((item) => `<div class="simple-item">${formatter(item)}</div>`).join('');
+}
+
+async function loadQueue() {
+  const params = new URLSearchParams({
+    limit: String(Number(els.queueLimit.value)),
+  });
+
+  if (els.queueBucket.value) params.set('bucket', els.queueBucket.value);
+  if (els.queueState.value) params.set('state', els.queueState.value);
+  if (els.queueMode.value) params.set('mode', els.queueMode.value);
+  if (els.queueSearch.value.trim()) params.set('search', els.queueSearch.value.trim());
+
+  const data = await api(`/dashboard/manager/queue?${params.toString()}`);
+  renderQueue(data.items);
+  return data.items;
+}
+
+async function loadCard(opportunityId = els.cardIdInput.value.trim()) {
+  if (!opportunityId) return null;
+  uiState.currentCardId = opportunityId;
+  try {
+    const card = await api(`/opportunities/${opportunityId}/card`);
+    renderCard(card);
+    return card;
+  } catch (error) {
+    renderCard(null);
+    return null;
+  }
+}
+
+async function loadIngestMonitor() {
+  const [pending, errors] = await Promise.all([
+    api('/events/bitrix/pending'),
+    api('/events/bitrix/errors'),
+  ]);
+
+  renderSimpleList(els.pendingList, pending.items, (item) =>
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0}</div>`,
+  );
+  renderSimpleList(els.errorList, errors.items, (item) =>
+    `<strong>${item.source_event_id ?? item.id}</strong><div class="muted">${item.processing_status} · retries ${item.retry_count ?? 0} · ${item.error_message ?? 'Без сообщения'}</div>${String(item.error_message ?? '').toLowerCase().includes('accepted normalization alias') ? '<div class="badge-row"><span class="badge badge-low">alias-assisted</span></div>' : ''}`,
+  );
+
+  return { pending: pending.items, errors: errors.items };
+}
+
+async function loadRopEscalations() {
+  const params = new URLSearchParams({ limit: '12' });
+  if (els.ropType.value) params.set('type', els.ropType.value);
+  const data = await api(`/dashboard/rop/escalations?${params.toString()}`);
+  renderRopEscalations(data.items);
+  return data.items;
+}
+
+async function loadDataQuality() {
+  const payload = await api('/dashboard/data-quality');
+  renderQualityDashboard(payload);
+  return payload;
+}
+
+async function loadNormalizationDashboard() {
+  const params = new URLSearchParams();
+  if (els.normalizationAction.value) params.set('action', els.normalizationAction.value);
+  const payload = await api(`/dashboard/normalization${params.toString() ? `?${params.toString()}` : ''}`);
+  renderNormalizationDashboard(payload);
+  return payload;
+}
+
+async function loadFeedbackLearningDashboard() {
+  const payload = await api('/dashboard/feedback-learning');
+  renderFeedbackLearningDashboard(payload);
+  return payload;
+}
+
+async function loadAuditLogs() {
+  try {
+    const payload = await api('/audit/logs?limit=12');
+    renderAuditLogs(payload.items ?? []);
+    return payload.items ?? [];
+  } catch {
+    renderAuditLogs([]);
+    return [];
+  }
+}
+
+async function loadAuthMe() {
+  uiState.auth = await api('/auth/me');
+  return uiState.auth;
+}
+
+async function loadLogisticsDashboard() {
+  const params = new URLSearchParams({ limit: '12' });
+  if (els.logisticsMode.value) params.set('mode', els.logisticsMode.value);
+  const data = await api(`/dashboard/logistics?${params.toString()}`);
+  renderLogisticsQueue(data.items);
+  return data;
+}
+
+async function loadOwnerDashboard() {
+  const params = new URLSearchParams({ limit: '12' });
+  if (els.ownerStrategy.value) params.set('strategy', els.ownerStrategy.value);
+  const payload = await api(`/dashboard/owner?${params.toString()}`);
+  renderOwnerDashboard(payload);
+  return payload;
+}
+
+async function loadSystemStatus() {
+  const payload = await api('/dashboard/system-status');
+  renderSystemStatus(payload);
+  return payload;
+}
+
+async function loadDictionaries() {
+  const payload = await api('/meta/dictionaries');
+  renderDictionaries(payload);
+  return payload;
+}
+
+async function loadDomainSummary() {
+  try {
+    const payload = await api('/dashboard/domain-summary');
+    uiState.domainLiveData = payload.domains ?? {};
+    uiState.domainLiveGeneratedAt = payload.generated_at ?? null;
+    return payload;
+  } catch {
+    uiState.domainLiveData = {};
+    uiState.domainLiveGeneratedAt = null;
+    return { domains: {} };
+  }
+}
+
+async function refreshAll() {
+  try {
+    applyHashIntent();
+    renderGlobalBrief();
+    renderArchitectureOverview();
+    renderDomainShowcase();
+    renderPresentationRail();
+    await loadAuthMe();
+    const [queueItems, ropItems, monitor] = await Promise.all([loadQueue(), loadRopEscalations(), loadIngestMonitor()]);
+    const [
+      qualityPayload,
+      normalizationPayload,
+      feedbackPayload,
+      auditItems,
+      logisticsPayload,
+      ownerPayload,
+      systemPayload,
+      dictionaryPayload,
+      domainSummaryPayload,
+    ] = await Promise.all([
+      loadDataQuality(),
+      loadNormalizationDashboard(),
+      loadFeedbackLearningDashboard(),
+      loadAuditLogs(),
+      loadLogisticsDashboard(),
+      loadOwnerDashboard(),
+      loadSystemStatus(),
+      loadDictionaries(),
+      loadDomainSummary(),
+    ]);
+    renderGlobalBrief();
+    renderArchitectureOverview();
+    renderDomainShowcase();
+    renderPresentationRail();
+    const currentCard = await loadCard();
+    if (!currentCard && queueItems[0]) {
+      els.cardIdInput.value = queueItems[0].opportunity_id;
+      await loadCard(queueItems[0].opportunity_id);
+    }
+    renderHeroStats(queueItems, ropItems, monitor.pending, monitor.errors);
+  } catch (error) {
+    els.cardView.innerHTML = `<div class="empty">Ошибка загрузки: ${error.message}</div>`;
+  }
+}
+
+els.refreshAll.addEventListener('click', refreshAll);
+els.loadFirstCard.addEventListener('click', async () => {
+  const queue = await loadQueue();
+  if (queue[0]) {
+    els.cardIdInput.value = queue[0].opportunity_id;
+    await loadCard(queue[0].opportunity_id);
+  }
+});
+els.loadCardButton.addEventListener('click', () => loadCard());
+els.queueLimit.addEventListener('change', refreshAll);
+els.queueBucket.addEventListener('change', refreshAll);
+els.queueState.addEventListener('change', refreshAll);
+els.queueMode.addEventListener('change', refreshAll);
+els.ropType.addEventListener('change', refreshAll);
+els.normalizationAction.addEventListener('change', refreshAll);
+els.logisticsMode.addEventListener('change', refreshAll);
+els.ownerStrategy.addEventListener('change', refreshAll);
+els.userRole.addEventListener('change', refreshAll);
+els.queueSearch.addEventListener('input', () => {
+  clearTimeout(els.queueSearch._debounceId);
+  els.queueSearch._debounceId = setTimeout(refreshAll, 250);
+});
+els.processIngestButton.addEventListener('click', async () => {
+  await api('/events/bitrix/process', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ limit: 50 }),
+  });
+  await refreshAll();
+});
+els.retryIngestButton.addEventListener('click', async () => {
+  await api('/events/bitrix/retry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      statuses: ['failed', 'suspicious'],
+      limit: 100,
+      process_after_retry: true,
+    }),
+  });
+  await refreshAll();
+});
+els.syncVectorsButton.addEventListener('click', async () => {
+  await api('/vectors/index', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  await refreshAll();
+});
+els.syncGraphButton.addEventListener('click', async () => {
+  await api('/graph/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  await refreshAll();
+});
+
+refreshAll();
