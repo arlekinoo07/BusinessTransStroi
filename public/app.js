@@ -3,6 +3,7 @@ import { domainArchitecture, getDomainByName, getDomains } from '/app/domain-arc
 const els = {
   refreshAll: document.querySelector('#refreshAll'),
   loadFirstCard: document.querySelector('#loadFirstCard'),
+  presentationRail: document.querySelector('#presentationRail'),
   processIngestButton: document.querySelector('#processIngestButton'),
   retryIngestButton: document.querySelector('#retryIngestButton'),
   syncVectorsButton: document.querySelector('#syncVectorsButton'),
@@ -58,6 +59,14 @@ const uiState = {
   domainLiveData: {},
   domainLiveGeneratedAt: null,
 };
+
+function syncHash(fragment) {
+  if (!fragment) return;
+  const nextHash = `#${fragment}`;
+  if (window.location.hash !== nextHash) {
+    window.history.replaceState(null, '', nextHash);
+  }
+}
 
 async function api(path, options) {
   const headers = new Headers(options?.headers ?? {});
@@ -311,6 +320,43 @@ function renderGlobalBrief() {
   });
 }
 
+function renderPresentationRail() {
+  const executiveAgenda = buildExecutiveAgenda();
+  const leadDomain = executiveAgenda.rankedDomains[0]?.domain.name ?? uiState.activeDomain;
+
+  els.presentationRail.innerHTML = `
+    <div class="presentation-rail-grid">
+      <div class="presentation-rail-copy">
+        <span class="badge badge-high">Presentation Mode</span>
+        <strong>Активный контур: ${uiState.activeDomain}</strong>
+        <span>Главный риск сейчас: ${leadDomain}</span>
+      </div>
+      <div class="presentation-rail-links">
+        <button class="presentation-rail-link" type="button" data-rail-jump="global">Brief</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="architecture">Architecture</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="showcase">Domain Screens</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="queue">Queue</button>
+        <button class="presentation-rail-link" type="button" data-rail-jump="owner">Owner</button>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll('[data-rail-jump]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const key = node.dataset.railJump;
+      const targetMap = {
+        global: '.panel-global-brief',
+        architecture: '.panel-architecture',
+        showcase: '.panel-domain-showcase',
+        queue: '#panel-queue',
+        owner: '#panel-owner',
+      };
+      document.querySelector(targetMap[key])?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      syncHash(key);
+    });
+  });
+}
+
 function renderDomainShowcase() {
   els.domainShowcaseIntro.innerHTML = `
     <article class="architecture-story">
@@ -473,6 +519,8 @@ function renderDomainShowcase() {
       uiState.activeDomain = domainName;
       renderArchitectureOverview();
       renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`domain-${domainName}`);
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
@@ -492,6 +540,8 @@ function renderDomainShowcase() {
       uiState.activeDomain = domainName;
       renderArchitectureOverview();
       renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
       const target = document.querySelector('.panel-architecture');
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -870,6 +920,9 @@ function renderArchitectureOverview() {
       if (!domainName || uiState.activeDomain === domainName) return;
       uiState.activeDomain = domainName;
       renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
     });
   });
 
@@ -879,8 +932,26 @@ function renderArchitectureOverview() {
       if (!domainName) return;
       uiState.activeDomain = domainName;
       renderArchitectureOverview();
+      renderDomainShowcase();
+      renderPresentationRail();
+      syncHash(`focus-${domainName}`);
     });
   });
+}
+
+function applyHashIntent() {
+  const raw = window.location.hash.replace(/^#/, '');
+  if (!raw) return;
+
+  if (raw.startsWith('focus-')) {
+    const domainName = decodeURIComponent(raw.slice(6));
+    uiState.activeDomain = domainName || uiState.activeDomain;
+  }
+
+  if (raw.startsWith('domain-')) {
+    const domainName = decodeURIComponent(raw.slice(7));
+    uiState.activeDomain = domainName || uiState.activeDomain;
+  }
 }
 
 function renderHeroStats(queueItems, ropItems, pendingItems, errorItems) {
@@ -2407,9 +2478,11 @@ async function loadDomainSummary() {
 
 async function refreshAll() {
   try {
+    applyHashIntent();
     renderGlobalBrief();
     renderArchitectureOverview();
     renderDomainShowcase();
+    renderPresentationRail();
     await loadAuthMe();
     const [queueItems, ropItems, monitor] = await Promise.all([loadQueue(), loadRopEscalations(), loadIngestMonitor()]);
     const [
@@ -2436,6 +2509,7 @@ async function refreshAll() {
     renderGlobalBrief();
     renderArchitectureOverview();
     renderDomainShowcase();
+    renderPresentationRail();
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {
       els.cardIdInput.value = queueItems[0].opportunity_id;

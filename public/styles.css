@@ -34,6 +34,53 @@ body {
   padding: 24px 0 40px;
 }
 
+.presentation-rail {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  margin-top: 18px;
+}
+
+.presentation-rail-inner {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px 16px;
+  background: rgba(255, 252, 245, 0.88);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.presentation-rail-grid,
+.presentation-rail-copy,
+.presentation-rail-links {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.presentation-rail-grid {
+  justify-content: space-between;
+}
+
+.presentation-rail-copy strong {
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 20px;
+}
+
+.presentation-rail-copy span:last-child {
+  color: var(--muted);
+}
+
+.presentation-rail-link {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  cursor: pointer;
+}
+
 .hero {
   display: grid;
   grid-template-columns: 1.8fr 1fr;
@@ -1205,6 +1252,7 @@ input,
 
 @media (max-width: 1100px) {
   .hero,
+  .presentation-rail-grid,
   .layout,
   .architecture-rail,
   .architecture-executive-grid,
@@ -1232,5 +1280,29 @@ input,
 
   .architecture-arrow {
     display: none;
+  }
+}
+
+@media print {
+  .hero-actions,
+  .queue-controls,
+  .search-box,
+  .presentation-rail,
+  .domain-showcase-nav,
+  .domain-screen-actions,
+  .focus-link-list,
+  .global-brief-actions,
+  .global-brief-nav {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .panel,
+  .hero {
+    box-shadow: none;
+    break-inside: avoid;
   }
 }
