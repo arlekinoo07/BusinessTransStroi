@@ -62,6 +62,18 @@ const domainsByName = {
         { label: 'Risk State', value: 'контур S3 активен', tone: 'medium' },
       ],
     },
+    scenarios: [
+      {
+        title: 'Кассовый разрыв на горизонте',
+        trigger: 'Ликвидность падает, дебиторка не ускоряется, payment-ready не растет.',
+        response: ['Ускорить сбор дебиторки', 'Заморозить часть расходов', 'Эскалировать CFO/CEO'],
+      },
+      {
+        title: 'Маржа размывается в активной воронке',
+        trigger: 'Растет число сделок с margin risk и credit blocks.',
+        response: ['Ограничить скидки', 'Пересмотреть условия оплаты', 'Вывести сделки на разбор'],
+      },
+    ],
     panels: ['queue', 'card', 'rop', 'owner', 'quality', 'system'],
   },
   Маркетинг: {
@@ -90,6 +102,18 @@ const domainsByName = {
         { label: 'ROMI Pulse', value: 'ниже нормы = пересборка', tone: 'critical' },
       ],
     },
+    scenarios: [
+      {
+        title: 'Лиды идут, но качество падает',
+        trigger: 'Lead quality проседает, client intent и price context неполные.',
+        response: ['Пересобрать ICP', 'Усилить квалификацию лидов', 'Почистить каналы с низким intent'],
+      },
+      {
+        title: 'Маркетинг съедает бюджет без возврата',
+        trigger: 'CAC растет, learning coverage и ROMI не подтверждают канал.',
+        response: ['Сместить бюджет', 'Отключить слабые офферы', 'Запустить fast review по каналам'],
+      },
+    ],
     panels: ['queue', 'quality', 'normalization', 'feedback', 'dictionary'],
   },
   Продажи: {
@@ -118,6 +142,18 @@ const domainsByName = {
         { label: 'Cash Conversion', value: 'продажа -> оплата', tone: 'critical' },
       ],
     },
+    scenarios: [
+      {
+        title: 'План продаж под риском',
+        trigger: 'Hot queue растет, next step signal слабый, воронка замедляется.',
+        response: ['Разобрать узкие этапы воронки', 'Перераспределить владельцев', 'Поднять приоритет hot deals'],
+      },
+      {
+        title: 'Сделки закрываются, но не становятся деньгами',
+        trigger: 'Payment ready и executed rate не дотягивают до цели.',
+        response: ['Ускорить invoice/contract stage', 'Контролировать оплату после sale', 'Эскалировать задержки'],
+      },
+    ],
     panels: ['queue', 'card', 'rop', 'feedback', 'audit', 'owner'],
   },
   Производство: {
@@ -146,6 +182,18 @@ const domainsByName = {
         { label: 'Unit Cost', value: 'себестоимость единицы', tone: 'critical' },
       ],
     },
+    scenarios: [
+      {
+        title: 'Срыв операционного плана',
+        trigger: 'Reserve coverage проседает, urgent ops растут, logistics context неполный.',
+        response: ['Перебалансировать резерв', 'Подтянуть партнеров', 'Поднять срочные кейсы в operations'],
+      },
+      {
+        title: 'Себестоимость идет вверх через субаренду',
+        trigger: 'Subrent share растет, own fleet share не закрывает нагрузку.',
+        response: ['Снижать долю субаренды', 'Укрепить собственный парк', 'Пересмотреть план нагрузки'],
+      },
+    ],
     panels: ['logistics', 'owner', 'queue', 'quality', 'system'],
   },
 };

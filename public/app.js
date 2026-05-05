@@ -30,6 +30,7 @@ const els = {
   domainShowcaseIntro: document.querySelector('#domainShowcaseIntro'),
   domainShowcaseNav: document.querySelector('#domainShowcaseNav'),
   domainShowcase: document.querySelector('#domainShowcase'),
+  scenarioLayer: document.querySelector('#scenarioLayer'),
   queueList: document.querySelector('#queueList'),
   ropList: document.querySelector('#ropList'),
   qualitySummary: document.querySelector('#qualitySummary'),
@@ -550,6 +551,66 @@ function renderDomainShowcase() {
   document.querySelectorAll('[data-scroll-top="architecture"]').forEach((node) => {
     node.addEventListener('click', () => {
       document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function renderScenarioLayer() {
+  els.scenarioLayer.innerHTML = `
+    <div class="scenario-layer-grid">
+      ${getDomains().map((domain) => `
+        <article class="scenario-domain-card scenario-domain-card-${domain.accent}">
+          <div class="scenario-domain-head">
+            <div>
+              <p class="panel-kicker">Scenario Domain</p>
+              <h3>${domain.name}</h3>
+            </div>
+            <span class="badge badge-${getDomainTone(domain.accent)}">${domain.scenarios?.length ?? 0} scenarios</span>
+          </div>
+          <div class="scenario-stack">
+            ${(domain.scenarios ?? []).map((scenario) => `
+              <section class="scenario-card">
+                <span class="domain-label">Scenario</span>
+                <strong>${scenario.title}</strong>
+                <p><strong>Trigger:</strong> ${scenario.trigger}</p>
+                <div class="badge-row">${renderListBadges(scenario.response, 'critical')}</div>
+              </section>
+            `).join('')}
+          </div>
+          <div class="scenario-actions">
+            <button class="domain-screen-action" type="button" data-scenario-focus="${domain.name}">Открыть домен</button>
+            <button class="domain-screen-action" type="button" data-scenario-showcase="${domain.name}">К экрану домена</button>
+          </div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+
+  document.querySelectorAll('[data-scenario-focus]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.scenarioFocus;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderPresentationRail();
+      renderGlobalBrief();
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderScenarioLayer();
+      document.querySelector('.panel-architecture')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.querySelectorAll('[data-scenario-showcase]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const domainName = node.dataset.scenarioShowcase;
+      if (!domainName) return;
+      uiState.activeDomain = domainName;
+      renderPresentationRail();
+      renderGlobalBrief();
+      renderArchitectureOverview();
+      renderDomainShowcase();
+      renderScenarioLayer();
+      document.getElementById(`domain-screen-${domainName}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 }
@@ -2482,6 +2543,7 @@ async function refreshAll() {
     renderGlobalBrief();
     renderArchitectureOverview();
     renderDomainShowcase();
+    renderScenarioLayer();
     renderPresentationRail();
     await loadAuthMe();
     const [queueItems, ropItems, monitor] = await Promise.all([loadQueue(), loadRopEscalations(), loadIngestMonitor()]);
@@ -2509,6 +2571,7 @@ async function refreshAll() {
     renderGlobalBrief();
     renderArchitectureOverview();
     renderDomainShowcase();
+    renderScenarioLayer();
     renderPresentationRail();
     const currentCard = await loadCard();
     if (!currentCard && queueItems[0]) {
